@@ -49,7 +49,7 @@
         <h2>Search results</h2>
         <div class="results">
           {% for book in results %}
-            <a class="result" href="/book/{{ book.id }}">
+            <a class="result" href="/book/{{ book.source }}/{{ book.id }}">
               {% if book.thumbnail %}<img src="{{ book.thumbnail }}" alt="{{ book.title }} cover">{% else %}<img alt="">{% endif %}
               <div>
                 <strong>{{ book.title }}</strong><br>

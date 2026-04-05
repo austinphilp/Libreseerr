@@ -20,14 +20,19 @@ def health():
 @app.get('/', response_class=HTMLResponse)
 async def home(request: Request, q: str = ''):
     settings = get_settings()
-    results = await search_books(q) if q else []
+    results = []
+    if q:
+        try:
+            results = await search_books(q)
+        except Exception:
+            results = []
     return templates.TemplateResponse('index.html', {'request': request, 'settings': settings, 'targets': settings.targets(), 'query': q, 'results': results})
 
 
-@app.get('/book/{book_id}', response_class=HTMLResponse)
-async def book_detail(request: Request, book_id: str):
+@app.get('/book/{source}/{book_id}', response_class=HTMLResponse)
+async def book_detail(request: Request, source: str, book_id: str):
     settings = get_settings()
-    book = await get_book(book_id)
+    book = await get_book(book_id, source=source)
     if book is None:
         raise HTTPException(status_code=404, detail='Book not found')
     return templates.TemplateResponse('book.html', {'request': request, 'settings': settings, 'targets': settings.targets(), 'book': book})
