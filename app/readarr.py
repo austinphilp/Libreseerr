@@ -10,29 +10,29 @@ class ReadarrClient:
         self.target = target
 
     async def request_book(self, title: str, author: str, goodreads_id: str | None = None) -> str:
-        search_payload = {
-            'term': title,
-            'type': 'search',
-        }
-        add_payload = {
-            'monitored': True,
-            'searchForNewBook': True,
-            'addOptions': {
-                'searchForBook': True,
-            },
-            'title': title,
-            'author': author,
-        }
-        if goodreads_id:
-            add_payload['foreignBookId'] = goodreads_id
-
         headers = {'X-Api-Key': self.target.api_key}
         async with httpx.AsyncClient(timeout=30.0) as client:
-            search_response = await client.get(f'{self.target.base_url}/api/v1/search', headers=headers, params=search_payload)
-            if search_response.status_code >= 400:
-                raise ValueError(f'Readarr search failed: {search_response.text.strip() or search_response.reason_phrase}')
+            author_search = await client.get(f'{self.target.base_url}/api/v1/author', headers=headers, params={'term': author})
+            if author_search.status_code >= 400:
+                raise ValueError(f'Readarr author search failed: {author_search.text.strip() or author_search.reason_phrase}')
+            authors = author_search.json()
+            if not authors:
+                raise ValueError(f'No Readarr author found for {author}')
+            author_resource = authors[0]
 
-            response = await client.post(f'{self.target.base_url}/api/v1/book', headers=headers, json=add_payload)
+            payload = {
+                'title': title,
+                'author': author_resource,
+                'monitored': True,
+                'searchForNewBook': True,
+                'addOptions': {
+                    'searchForBook': True,
+                },
+            }
+            if goodreads_id:
+                payload['foreignBookId'] = goodreads_id
+
+            response = await client.post(f'{self.target.base_url}/api/v1/book', headers=headers, json=payload)
 
         if response.status_code >= 400:
             detail = response.text.strip() or response.reason_phrase
