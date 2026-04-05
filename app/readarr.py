@@ -81,9 +81,7 @@ class ReadarrClient:
             'addOptions': {
                 'monitor': 'all',
                 'searchForMissingBooks': True,
-                'booksToMonitor': [
-                    self._best_book_title(lookup_author, author_name)
-                ],
+                'booksToMonitor': [self._best_book_title(lookup_author, author_name)],
             },
         }
         if author_id is not None:
@@ -139,14 +137,14 @@ class ReadarrClient:
             'anyEditionOk': False,
             'addOptions': {
                 'addType': 'automatic',
-                'searchForNewBook': False,
+                'searchForNewBook': True,
             },
             'editions': [self._normalize_edition(book, edition)],
         }
         return {k: v for k, v in payload.items() if v is not None}
 
     def _normalize_edition(self, book: dict, edition: dict) -> dict:
-        normalized = {
+        return {
             'foreignEditionId': edition.get('foreignEditionId') or book.get('foreignEditionId') or book.get('foreignBookId'),
             'title': edition.get('title') or book.get('title'),
             'language': edition.get('language'),
@@ -163,7 +161,6 @@ class ReadarrClient:
             'monitored': False,
             'manualAdd': True,
         }
-        return normalized
 
     def _sanitize(self, value: str) -> str:
         return ''.join(ch if ch.isalnum() or ch in {' ', '-', '_', '.', '(', ')'} else '_' for ch in value).strip().replace('  ', ' ')
