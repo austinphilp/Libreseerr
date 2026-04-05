@@ -30,7 +30,7 @@ def create_request_task(client: ReadarrClient, title: str, author: str, target: 
 
     async def runner() -> None:
         try:
-            _tasks[task_id] = RequestTask(id=task_id, status='processing', message='Submitting to Readarr', title=title, author=author, target=target)
+            _tasks[task_id] = RequestTask(id=task_id, status='processing', message='Creating author and requesting book in Readarr', title=title, author=author, target=target)
             result = await client.request_book(title=title, author=author, goodreads_id=goodreads_id)
             _tasks[task_id] = RequestTask(id=task_id, status='success', message=result, title=title, author=author, target=target)
         except Exception as exc:
