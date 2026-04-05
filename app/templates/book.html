@@ -25,8 +25,8 @@
   <div class="container">
     <div class="panel">
       <p><a href="/">← Back</a></p>
-      {% if message %}<div class="notice success">{{ message }}</div>{% endif %}
-      {% if error %}<div class="notice error">{{ error }}</div>{% endif %}
+      <div id="status" class="notice success" style="display:none"></div>
+      <div id="error" class="notice error" style="display:none"></div>
       <div class="detail">
         {% if book.thumbnail %}<img src="{{ book.thumbnail }}" alt="{{ book.title }} cover">{% endif %}
         <div>
@@ -35,22 +35,61 @@
           <h3>Blurb</h3>
           <p>{{ book.description }}</p>
           <h3>Download to Readarr</h3>
-          <form method="post" action="/request">
+          <form id="request-form" method="post" action="/request">
             <input type="hidden" name="title" value="{{ book.title }}">
             <input type="hidden" name="author" value="{{ book.author }}">
             <input type="hidden" name="goodreads_id" value="{{ book.isbn or book.id }}">
-            <input type="hidden" name="source" value="{{ book.source }}">
-            <input type="hidden" name="book_id" value="{{ book.id }}">
             <select name="target_name">
               {% for target in targets %}
                 <option value="{{ target.name }}">{{ target.name }} — {{ target.kind }}</option>
               {% endfor %}
             </select>
-            <button type="submit">Download</button>
+            <button type="submit" id="submit-btn">Download</button>
           </form>
         </div>
       </div>
     </div>
   </div>
+  <script>
+    const form = document.getElementById('request-form');
+    const statusBox = document.getElementById('status');
+    const errorBox = document.getElementById('error');
+    const submitBtn = document.getElementById('submit-btn');
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      statusBox.style.display = 'block';
+      errorBox.style.display = 'none';
+      statusBox.textContent = 'Submitted. Sending to Readarr...';
+      submitBtn.disabled = true;
+      const formData = new FormData(form);
+      const response = await fetch('/request', { method: 'POST', body: formData });
+      const data = await response.json();
+      if (!response.ok) {
+        errorBox.style.display = 'block';
+        errorBox.textContent = data.detail || 'Request failed';
+        statusBox.style.display = 'none';
+        submitBtn.disabled = false;
+        return;
+      }
+      const taskId = data.task_id;
+      const poll = async () => {
+        const taskResponse = await fetch(`/request/${taskId}`);
+        const task = await taskResponse.json();
+        if (task.status === 'submitted' || task.status === 'processing') {
+          statusBox.textContent = task.message;
+          setTimeout(poll, 2000);
+        } else if (task.status === 'success') {
+          statusBox.textContent = task.message;
+          submitBtn.disabled = false;
+        } else {
+          errorBox.style.display = 'block';
+          errorBox.textContent = task.message;
+          statusBox.style.display = 'none';
+          submitBtn.disabled = false;
+        }
+      };
+      poll();
+    });
+  </script>
 </body>
 </html>
