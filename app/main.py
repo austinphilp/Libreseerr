@@ -7,11 +7,6 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 
-class QualityProfileSelection(BaseModel):
-    name: str
-    id: int
-    target_name: str
-
 from .config import get_settings
 from .metadata import get_book, search_books
 from .readarr import ReadarrClient
@@ -53,6 +48,15 @@ async def book_detail(request: Request, source: str, book_id: str):
     return templates.TemplateResponse('book.html', {'request': request, 'settings': settings, 'targets': settings.targets(), 'book': book, 'quality_profiles': quality_profiles})
 
 
+@app.get('/readarr/{target_name}/quality-profiles')
+async def readarr_quality_profiles(target_name: str):
+    settings = get_settings()
+    target = next((t for t in settings.targets() if t.name == target_name), None)
+    if target is None:
+        raise HTTPException(status_code=404, detail='Readarr target not found')
+    return await ReadarrClient(target).list_quality_profiles()
+
+
 @app.post('/request')
 async def request_book(title: str = Form(...), author: str = Form(...), target_name: str = Form(...), quality_profile_id: int = Form(...), goodreads_id: str | None = Form(default=None)):
     settings = get_settings()
@@ -62,6 +66,30 @@ async def request_book(title: str = Form(...), author: str = Form(...), target_n
     client = ReadarrClient(target)
     task = create_request_task(client, title=title, author=author, target=target_name, goodreads_id=goodreads_id)
     return JSONResponse({'task_id': task.id, 'status': task.status, 'message': task.message, 'quality_profile_id': quality_profile_id})
+
+
+@app.get('/book/{source}/{book_id}', response_class=HTMLResponse)
+async def book_detail(request: Request, source: str, book_id: str):
+    settings = get_settings()
+    book = await get_book(book_id, source=source)
+    if book is None:
+        raise HTTPException(status_code=404, detail='Book not found')
+    quality_profiles = []
+    for target in settings.targets():
+        try:
+            quality_profiles.extend(await ReadarrClient(target).list_quality_profiles())
+        except Exception:
+            continue
+    return templates.TemplateResponse('book.html', {'request': request, 'settings': settings, 'targets': settings.targets(), 'book': book, 'quality_profiles': quality_profiles})
+
+
+@app.get('/readarr/{target_name}/quality-profiles')
+async def readarr_quality_profiles(target_name: str):
+    settings = get_settings()
+    target = next((t for t in settings.targets() if t.name == target_name), None)
+    if target is None:
+        raise HTTPException(status_code=404, detail='Readarr target not found')
+    return await ReadarrClient(target).list_quality_profiles()
 
 
 @app.post('/request/{task_id}/retry')

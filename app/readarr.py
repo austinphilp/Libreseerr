@@ -9,15 +9,47 @@ class ReadarrClient:
     def __init__(self, target: ReadarrTargetSettings):
         self.target = target
 
-    async def request_book(self, title: str, author: str, goodreads_id: str | None = None, task_id: str | None = None) -> str:
+    async def request_book(self, title: str, author: str, quality_profile_id: int | None = None, goodreads_id: str | None = None, task_id: str | None = None) -> str:
         timeout = httpx.Timeout(20.0, connect=5.0, read=20.0, write=20.0, pool=5.0)
         headers = {'X-Api-Key': self.target.api_key}
         async with httpx.AsyncClient(timeout=timeout) as client:
-            author_resource = await self._ensure_author(client, headers, author)
+            author_resource = await self._ensure_author(client, headers, author, quality_profile_id)
             book_resource = await self._ensure_book(client, headers, title, author_resource)
             await self._monitor_book(client, headers, book_resource['id'])
             await self._search_book(client, headers, book_resource['id'])
         return 'Author added, requested book monitored and searched'
+
+    async def list_quality_profiles(self) -> list[dict]:
+        timeout = httpx.Timeout(20.0, connect=5.0, read=20.0, write=20.0, pool=5.0)
+        headers = {'X-Api-Key': self.target.api_key}
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.get(f'{self.target.base_url}/api/v1/qualityprofile', headers=headers)
+            if response.status_code >= 400:
+                raise ValueError(f'Readarr quality profile lookup failed: {self._format_error(response)}')
+            return response.json()
+
+    async def quality_profile_id_for_name(self, name: str) -> int:
+        profiles = await self.list_quality_profiles()
+        for profile in profiles:
+            if profile.get('name') == name:
+                return profile['id']
+        raise ValueError(f'Readarr quality profile not found: {name}')
+
+    async def list_quality_profiles(self) -> list[dict]:
+        timeout = httpx.Timeout(20.0, connect=5.0, read=20.0, write=20.0, pool=5.0)
+        headers = {'X-Api-Key': self.target.api_key}
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.get(f'{self.target.base_url}/api/v1/qualityprofile', headers=headers)
+            if response.status_code >= 400:
+                raise ValueError(f'Readarr quality profile lookup failed: {self._format_error(response)}')
+            return response.json()
+
+    async def quality_profile_id_for_name(self, name: str) -> int:
+        profiles = await self.list_quality_profiles()
+        for profile in profiles:
+            if profile.get('name') == name:
+                return profile['id']
+        raise ValueError(f'Readarr quality profile not found: {name}')
 
     async def list_quality_profiles(self) -> list[dict]:
         timeout = httpx.Timeout(20.0, connect=5.0, read=20.0, write=20.0, pool=5.0)
@@ -49,7 +81,7 @@ class ReadarrClient:
             return current
 
         root_folder = await self._first_root_folder(client, headers)
-        quality_profile = await self._quality_profile_id(client, headers)
+        quality_profile = quality_profile_id or await self._quality_profile_id(client, headers)
         metadata_profile = await self._first_metadata_profile(client, headers)
         if not root_folder or not quality_profile or not metadata_profile:
             raise ValueError('Readarr author add failed: missing root folder or profile configuration')
