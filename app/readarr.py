@@ -9,7 +9,7 @@ class ReadarrClient:
     def __init__(self, target: ReadarrTargetSettings):
         self.target = target
 
-    async def request_book(self, title: str, author: str, goodreads_id: str | None = None, task_id: str | None = None) -> str:
+    async def request_book(self, title: str, author: str, goodreads_id: str | None = None) -> str:
         timeout = httpx.Timeout(20.0, connect=5.0, read=20.0, write=20.0, pool=5.0)
         headers = {'X-Api-Key': self.target.api_key}
         async with httpx.AsyncClient(timeout=timeout) as client:
@@ -137,8 +137,7 @@ class ReadarrClient:
         return {k: v for k, v in payload.items() if v is not None}
 
     def _normalize_edition(self, book: dict, edition: dict) -> dict:
-        return {
-            'id': edition.get('id'),
+        normalized = {
             'foreignEditionId': edition.get('foreignEditionId') or book.get('foreignEditionId') or book.get('foreignBookId'),
             'title': edition.get('title') or book.get('title'),
             'language': edition.get('language'),
@@ -155,6 +154,9 @@ class ReadarrClient:
             'monitored': True,
             'manualAdd': True,
         }
+        if edition.get('id') is not None:
+            normalized['id'] = int(edition['id'])
+        return normalized
 
     def _sanitize(self, value: str) -> str:
         return ''.join(ch if ch.isalnum() or ch in {' ', '-', '_', '.', '(', ')'} else '_' for ch in value).strip().replace('  ', ' ')
