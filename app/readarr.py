@@ -64,8 +64,8 @@ class ReadarrClient:
         if editions:
             return [
                 {
-                    'id': edition.get('id'),
-                    'bookId': edition.get('bookId') or book_resource.get('id'),
+                    'id': int(edition['id']) if edition.get('id') is not None else None,
+                    'bookId': int(edition['bookId']) if edition.get('bookId') is not None else int(book_resource['id']) if book_resource.get('id') is not None else None,
                     'foreignEditionId': edition.get('foreignEditionId'),
                     'title': edition.get('title'),
                     'language': edition.get('language'),
@@ -88,7 +88,7 @@ class ReadarrClient:
         return [
             {
                 'title': book_resource.get('title') or 'Unknown title',
-                'bookId': book_resource.get('id'),
+                'bookId': int(book_resource['id']) if book_resource.get('id') is not None else None,
                 'foreignEditionId': book_resource.get('foreignEditionId') or book_resource.get('foreignBookId') or str(book_resource.get('id') or ''),
                 'isEbook': False,
                 'monitored': True,
