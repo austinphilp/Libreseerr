@@ -20,17 +20,28 @@ class ReadarrClient:
                 raise ValueError(f'No Readarr author found for {author}')
             author_resource = authors[0]
 
+            book_search = await client.get(f'{self.target.base_url}/api/v1/search', headers=headers, params={'term': title})
+            if book_search.status_code >= 400:
+                raise ValueError(f'Readarr book search failed: {book_search.text.strip() or book_search.reason_phrase}')
+            books = book_search.json()
+            if not books:
+                raise ValueError(f'No Readarr book found for {title}')
+            book_resource = books[0]
+            editions = book_resource.get('editions') or []
+            if not editions:
+                raise ValueError(f'Readarr book has no editions for {title}')
+
             payload = {
-                'title': title,
+                'title': book_resource.get('title', title),
                 'author': author_resource,
+                'foreignBookId': goodreads_id or book_resource.get('foreignBookId'),
+                'editions': editions,
                 'monitored': True,
                 'searchForNewBook': True,
                 'addOptions': {
                     'searchForBook': True,
                 },
             }
-            if goodreads_id:
-                payload['foreignBookId'] = goodreads_id
 
             response = await client.post(f'{self.target.base_url}/api/v1/book', headers=headers, json=payload)
 
