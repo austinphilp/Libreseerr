@@ -26,22 +26,22 @@ class ReadarrClient:
             books = book_search.json()
             if not books:
                 raise ValueError(f'No Readarr book found for {title}')
-            book_resource = books[0]
-            editions = book_resource.get('editions') or []
-            if not editions:
-                return await self._request_by_lookup(client, headers, title, author_resource, goodreads_id)
 
+            selected = self._select_candidate(books, title)
             payload = {
-                'title': book_resource.get('title', title),
+                'title': selected.get('title', title),
                 'author': author_resource,
-                'foreignBookId': goodreads_id or book_resource.get('foreignBookId'),
-                'editions': editions,
+                'foreignBookId': goodreads_id or selected.get('foreignBookId'),
+                'edition': self._first_edition(selected),
                 'monitored': True,
                 'searchForNewBook': True,
                 'addOptions': {
                     'searchForBook': True,
                 },
             }
+
+            if payload['edition'] is None:
+                payload.pop('edition')
 
             response = await client.post(f'{self.target.base_url}/api/v1/book', headers=headers, json=payload)
 
@@ -51,19 +51,13 @@ class ReadarrClient:
 
         return 'Requested successfully'
 
-    async def _request_by_lookup(self, client: httpx.AsyncClient, headers: dict[str, str], title: str, author_resource: dict, goodreads_id: str | None) -> str:
-        payload = {
-            'title': title,
-            'author': author_resource,
-            'foreignBookId': goodreads_id,
-            'monitored': True,
-            'searchForNewBook': True,
-            'addOptions': {
-                'searchForBook': True,
-            },
-        }
-        response = await client.post(f'{self.target.base_url}/api/v1/book', headers=headers, json=payload)
-        if response.status_code >= 400:
-            detail = response.text.strip() or response.reason_phrase
-            raise ValueError(f'Readarr rejected request: {detail}')
-        return 'Requested successfully'
+    def _select_candidate(self, books: list[dict], title: str) -> dict:
+        normalized = title.casefold()
+        for book in books:
+            if book.get('title', '').casefold() == normalized:
+                return book
+        return books[0]
+
+    def _first_edition(self, book: dict) -> dict | None:
+        editions = book.get('editions') or []
+        return editions[0] if editions else None
