@@ -116,6 +116,18 @@ def update_quality_profile_for_request(task_id: str, quality_profile_id: int) ->
     return task
 
 
+def update_task_error_detail(task_id: str, detail: str) -> None:
+    task = _tasks.get(task_id)
+    if task is not None:
+        task.error_detail = detail
+        _tasks[task_id] = task
+
+
+def clear_request_tasks() -> None:
+    _tasks.clear()
+    _order.clear()
+
+
 def get_request_task(task_id: str) -> RequestTask | None:
     return _tasks.get(task_id)
 
