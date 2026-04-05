@@ -126,12 +126,18 @@
                   }
                   status.textContent = 'Request queued';
                   status.className = 'pill success';
-                  const text = await res.text();
-                  if (text) {
-                    window.location.hash = 'request-status';
-                  }
                 });
               });
+            </script>
+            <script>
+              async function refreshHistory() {
+                const response = await fetch('/');
+                if (response.ok) {
+                  window.location.reload();
+                }
+              }
+              setInterval(refreshHistory, 5000);
+            </script>
             </script>
               </div>
             </div>
