@@ -21,15 +21,6 @@ class ReadarrClient:
             await self._search_book(client, headers, author_resource['id'], book['id'])
         return 'Author added, requested book monitored, search started'
 
-    async def _search_book(self, client: httpx.AsyncClient, headers: dict[str, str], author_id: int, book_id: int) -> None:
-        response = await client.post(f'{self.target.base_url}/api/v1/command', headers=headers, json={
-            'name': 'SearchSingleBook',
-            'authorIds': [author_id],
-            'bookIds': [book_id],
-        })
-        if response.status_code >= 400:
-            raise ValueError(f'Readarr search failed: {self._format_error(response)}')
-
     async def _lookup_or_create_author(self, client: httpx.AsyncClient, headers: dict[str, str], author_name: str) -> dict:
         lookup = await client.get(f'{self.target.base_url}/api/v1/author/lookup', headers=headers, params={'term': author_name})
         if lookup.status_code >= 400:
