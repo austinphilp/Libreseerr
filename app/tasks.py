@@ -34,7 +34,7 @@ def create_request_task(client: ReadarrClient, title: str, author: str, target: 
             result = await client.request_book(title=title, author=author, goodreads_id=goodreads_id)
             _tasks[task_id] = RequestTask(id=task_id, status='success', message=result, title=title, author=author, target=target)
         except Exception as exc:
-            _tasks[task_id] = RequestTask(id=task_id, status='error', message=str(exc), title=title, author=author, target=target)
+            _tasks[task_id] = RequestTask(id=task_id, status='error', message=f'{type(exc).__name__}: {exc}', title=title, author=author, target=target)
 
     asyncio.create_task(runner())
     return task
