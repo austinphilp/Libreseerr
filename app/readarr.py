@@ -18,8 +18,7 @@ class ReadarrClient:
             if book is None:
                 raise ValueError(f'No Readarr book found for {title}')
             await self._monitor_requested_book(client, headers, book['id'])
-            await self._search_book(client, headers, author_resource['id'], book['id'])
-        return 'Author added, requested book monitored, search started'
+        return 'Author added, requested book monitored'
 
     async def _lookup_or_create_author(self, client: httpx.AsyncClient, headers: dict[str, str], author_name: str) -> dict:
         lookup = await client.get(f'{self.target.base_url}/api/v1/author/lookup', headers=headers, params={'term': author_name})
