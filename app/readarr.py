@@ -21,15 +21,11 @@ class ReadarrClient:
             if book is None:
                 raise ValueError(f'No Readarr book found for {title}')
             await self._monitor_requested_book(client, headers, book['id'])
-            await self._search_requested_book(client, headers, author, book['id'])
+            await self._search_requested_book(client, headers, book['id'])
         return 'Author added, requested book monitored and searched'
 
-    async def _search_requested_book(self, client: httpx.AsyncClient, headers: dict[str, str], author_name: str, book_id: int) -> None:
-        response = await client.post(f'{self.target.base_url}/api/v1/command', headers=headers, json={
-            'name': 'BooksSearch',
-            'authorId': author_name,
-            'bookIds': [book_id],
-        })
+    async def _search_requested_book(self, client: httpx.AsyncClient, headers: dict[str, str], book_id: int) -> None:
+        response = await client.post(f'{self.target.base_url}/api/v1/book/search', headers=headers, json=[book_id])
         if response.status_code >= 400:
             raise ValueError(f'Readarr book search failed: {self._format_error(response)}')
 
