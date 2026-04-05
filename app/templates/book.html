@@ -76,14 +76,15 @@
         const taskResponse = await fetch(`/request/${taskId}`);
         const task = await taskResponse.json();
         if (task.status === 'submitted' || task.status === 'processing') {
-          statusBox.textContent = task.message;
+          statusBox.textContent = `${task.status}: ${task.author_status} / ${task.book_status}`;
           setTimeout(poll, 2000);
         } else if (task.status === 'success') {
           statusBox.textContent = task.message;
           submitBtn.disabled = false;
+          window.location.reload();
         } else {
           errorBox.style.display = 'block';
-          errorBox.textContent = task.message;
+          errorBox.textContent = `${task.message}`;
           statusBox.style.display = 'none';
           submitBtn.disabled = false;
         }

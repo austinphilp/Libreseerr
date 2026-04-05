@@ -31,6 +31,7 @@
     .success { color: #86efac; }
     .error { color: #fca5a5; }
     .processing, .submitted { color: #fbbf24; }
+    .retry { margin-top: 10px; padding: 10px 12px; border-radius: 10px; border: none; cursor: pointer; background: #334155; color: #e5e7eb; }
     @media (max-width: 900px) { .grid, .hero { grid-template-columns: 1fr; flex-direction: column; } }
   </style>
 </head>
@@ -73,8 +74,19 @@
             <div class="history-item">
               <strong>{{ item.title }}</strong><br>
               <span class="muted">{{ item.author }} · {{ item.target }}</span><br>
-              <span class="status {{ item.status }}">{{ item.status }}</span><br>
-              <span class="muted">{{ item.message }}</span>
+              <div>
+                <span class="status {{ item.author_status }}">author {{ item.author_status }}</span><br>
+                <span class="muted">{{ item.author_message }}</span>
+              </div>
+              <div style="margin-top:8px">
+                <span class="status {{ item.book_status }}">book {{ item.book_status }}</span><br>
+                <span class="muted">{{ item.book_message or item.message }}</span>
+              </div>
+              {% if item.status == 'error' %}
+                <form method="post" action="/request/{{ item.id }}/retry">
+                  <button class="retry" type="submit">Retry</button>
+                </form>
+              {% endif %}
             </div>
           {% else %}
             <p class="muted">No requests yet.</p>

@@ -15,6 +15,10 @@ class RequestTask:
     title: str
     author: str
     target: str
+    author_status: str = 'pending'
+    book_status: str = 'pending'
+    author_message: str = ''
+    book_message: str = ''
 
 
 _tasks: dict[str, RequestTask] = {}
@@ -30,14 +34,22 @@ def create_request_task(client: ReadarrClient, title: str, author: str, target: 
 
     async def runner() -> None:
         try:
-            _tasks[task_id] = RequestTask(id=task_id, status='processing', message='Creating author and requesting book in Readarr', title=title, author=author, target=target)
-            result = await client.request_book(title=title, author=author, goodreads_id=goodreads_id)
-            _tasks[task_id] = RequestTask(id=task_id, status='success', message=result, title=title, author=author, target=target)
+            _tasks[task_id] = RequestTask(id=task_id, status='processing', message='Submitting to Readarr', title=title, author=author, target=target, author_status='processing', book_status='pending', author_message='Adding author', book_message='Waiting to add book')
+            result = await client.request_book(title=title, author=author, goodreads_id=goodreads_id, task_id=task_id)
+            _tasks[task_id] = RequestTask(id=task_id, status='success', message=result, title=title, author=author, target=target, author_status='success', book_status='success', author_message='Author added', book_message='Book added and search started')
         except Exception as exc:
-            _tasks[task_id] = RequestTask(id=task_id, status='error', message=f'{type(exc).__name__}: {exc}', title=title, author=author, target=target)
+            current = _tasks.get(task_id)
+            _tasks[task_id] = RequestTask(id=task_id, status='error', message=f'{type(exc).__name__}: {exc}', title=title, author=author, target=target, author_status=current.author_status if current else 'error', book_status='error', author_message=current.author_message if current else '', book_message=str(exc))
 
     asyncio.create_task(runner())
     return task
+
+
+def retry_request_task(client: ReadarrClient, task_id: str) -> RequestTask:
+    previous = _tasks.get(task_id)
+    if previous is None:
+        raise KeyError(task_id)
+    return create_request_task(client, previous.title, previous.author, previous.target, None)
 
 
 def get_request_task(task_id: str) -> RequestTask | None:

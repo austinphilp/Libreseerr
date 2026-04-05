@@ -7,7 +7,7 @@ from fastapi.templating import Jinja2Templates
 from .config import get_settings
 from .metadata import get_book, search_books
 from .readarr import ReadarrClient
-from .tasks import create_request_task, get_request_task, list_request_tasks
+from .tasks import create_request_task, get_request_task, list_request_tasks, retry_request_task
 
 app = FastAPI(title='Libreseerr')
 templates = Jinja2Templates(directory='app/templates')
@@ -50,9 +50,23 @@ async def request_book(title: str = Form(...), author: str = Form(...), target_n
     return JSONResponse({'task_id': task.id, 'status': task.status, 'message': task.message})
 
 
+@app.post('/request/{task_id}/retry')
+async def retry_request(task_id: str):
+    settings = get_settings()
+    previous = get_request_task(task_id)
+    if previous is None:
+        raise HTTPException(status_code=404, detail='Request not found')
+    target = next((t for t in settings.targets() if t.name == previous.target), None)
+    if target is None:
+        raise HTTPException(status_code=404, detail='Readarr target not found')
+    client = ReadarrClient(target)
+    task = retry_request_task(client, task_id)
+    return {'task_id': task.id, 'status': task.status, 'message': task.message}
+
+
 @app.get('/request/{task_id}')
 async def request_status(task_id: str):
     task = get_request_task(task_id)
     if task is None:
         raise HTTPException(status_code=404, detail='Request not found')
-    return {'task_id': task.id, 'status': task.status, 'message': task.message}
+    return {'task_id': task.id, 'status': task.status, 'message': task.message, 'author_status': task.author_status, 'book_status': task.book_status, 'author_message': task.author_message, 'book_message': task.book_message}
