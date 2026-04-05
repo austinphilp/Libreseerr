@@ -86,6 +86,13 @@
                 updateQualityProfiles(select.closest('form'));
               });
             </script>
+            <script>
+              document.querySelectorAll('form[action="/request"]').forEach(form => {
+                form.addEventListener('submit', () => {
+                  setTimeout(() => window.location.href = '/', 0);
+                });
+              });
+            </script>
               </div>
             </div>
           {% else %}

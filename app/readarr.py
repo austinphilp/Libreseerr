@@ -19,6 +19,16 @@ class ReadarrClient:
             await self._search_book(client, headers, book_resource['id'])
         return 'Author added, requested book monitored and searched'
 
+    async def request_quality_profiles(self) -> list[dict]:
+        return await self.list_quality_profiles()
+
+    async def quality_profile_by_id(self, profile_id: int) -> dict | None:
+        profiles = await self.list_quality_profiles()
+        for profile in profiles:
+            if profile.get('id') == profile_id:
+                return profile
+        return None
+
     async def list_quality_profiles(self) -> list[dict]:
         timeout = httpx.Timeout(20.0, connect=5.0, read=20.0, write=20.0, pool=5.0)
         headers = {'X-Api-Key': self.target.api_key}

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from .config import get_settings
@@ -63,7 +63,15 @@ async def request_book(title: str = Form(...), author: str = Form(...), target_n
     client = ReadarrClient(target)
     task = create_request_task(client, title=title, author=author, target=target_name, goodreads_id=goodreads_id)
     update_quality_profile_for_request(task.id, quality_profile_id)
-    return {'task_id': task.id, 'status': task.status, 'message': task.message}
+    return RedirectResponse(url=f'/?q={title}', status_code=303)
+
+
+@app.post('/request/{task_id}/quality-profile')
+async def set_request_quality_profile(task_id: str, quality_profile_id: int = Form(...)):
+    task = update_quality_profile_for_request(task_id, quality_profile_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail='Request not found')
+    return RedirectResponse(url='/', status_code=303)
 
 
 @app.get('/request/{task_id}/status')
