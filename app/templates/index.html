@@ -63,23 +63,19 @@
                 <form method="post" action="/request" style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
                   <input type="hidden" name="title" value="{{ book.title }}">
                   <input type="hidden" name="author" value="{{ book.author }}">
-                  <select name="target_name" class="target-select" data-quality-url-base="/readarr" required>
+                  <select name="target_name" class="target-select" required>
                     {% for target in targets %}
                       <option value="{{ target.name }}">{{ target.name }}</option>
                     {% endfor %}
                   </select>
-                  <select name="quality_profile_id" required>
-                    {% for profile in quality_profiles %}
-                      <option value="{{ profile.id }}">{{ profile.name }}</option>
-                    {% endfor %}
-                  </select>
+                  <select name="quality_profile_id" class="quality-profile-select" required></select>
                   <button type="submit">Download</button>
                 </form>
 
             <script>
               async function updateQualityProfiles(form) {
                 const targetSelect = form.querySelector('.target-select');
-                const profileSelect = form.querySelector('select[name="quality_profile_id"]');
+                const profileSelect = form.querySelector('.quality-profile-select');
                 const target = targetSelect.value;
                 const res = await fetch(`/readarr/${encodeURIComponent(target)}/quality-profiles`);
                 const profiles = await res.json();
