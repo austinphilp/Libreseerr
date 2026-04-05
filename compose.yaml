@@ -1,6 +1,6 @@
 services:
   libreseerr:
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-YOUR_GH_USER}/libreseerr:latest
+    image: ghcr.io/zamnzim/libreseerr:latest
     ports:
       - "8000:8000"
     environment:

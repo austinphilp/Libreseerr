@@ -75,15 +75,15 @@
               <strong>{{ item.title }}</strong><br>
               <span class="muted">{{ item.author }} · {{ item.target }}</span><br>
               <div>
-                <span class="status {{ item.author_status }}">author {{ item.author_status }}</span><br>
+                <span class="status {{ item.author_status }}">author added</span><br>
                 <span class="muted">{{ item.author_message }}</span>
               </div>
               <div style="margin-top:8px">
-                <span class="status {{ item.book_status }}">book {{ item.book_status }}</span><br>
+                <span class="status {{ item.book_status }}">requested book added</span><br>
                 <span class="muted">{{ item.book_message }}</span>
               </div>
               <div style="margin-top:8px">
-                <span class="status {{ item.search_status }}">search {{ item.search_status }}</span><br>
+                <span class="status {{ item.search_status }}">search started</span><br>
                 <span class="muted">{{ item.search_message }}</span>
               </div>
               {% if item.status == 'error' %}

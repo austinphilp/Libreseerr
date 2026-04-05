@@ -29,16 +29,16 @@ _order: list[str] = []
 
 def create_request_task(client: ReadarrClient, title: str, author: str, target: str, goodreads_id: str | None) -> RequestTask:
     task_id = str(uuid.uuid4())
-    task = RequestTask(id=task_id, status='submitted', message='Request submitted', title=title, author=author, target=target)
+    task = RequestTask(id=task_id, status='submitted', message='Request submitted', title=title, author=author, target=target, author_status='processing', book_status='pending', search_status='pending', author_message='Adding author', book_message='Waiting to add requested book', search_message='Waiting to start search')
     _tasks[task_id] = task
     _order.insert(0, task_id)
     del _order[20:]
 
     async def runner() -> None:
         try:
-            _tasks[task_id] = RequestTask(id=task_id, status='processing', message='Submitting to Readarr', title=title, author=author, target=target, author_status='processing', book_status='pending', search_status='pending', author_message='Adding author', book_message='Waiting to add book', search_message='Waiting to search')
+            _tasks[task_id] = RequestTask(id=task_id, status='processing', message='Submitting to Readarr', title=title, author=author, target=target, author_status='processing', book_status='pending', search_status='pending', author_message='Adding author', book_message='Waiting to add requested book', search_message='Waiting to start search')
             result = await client.request_book(title=title, author=author, goodreads_id=goodreads_id, task_id=task_id)
-            _tasks[task_id] = RequestTask(id=task_id, status='success', message=result, title=title, author=author, target=target, author_status='success', book_status='success', search_status='success', author_message='Author added', book_message='Book added', search_message='Search started')
+            _tasks[task_id] = RequestTask(id=task_id, status='success', message=result, title=title, author=author, target=target, author_status='success', book_status='success', search_status='success', author_message='Author added', book_message='Requested book added', search_message='Search started')
         except Exception as exc:
             msg = f'{type(exc).__name__}: {exc}'
             current = _tasks.get(task_id)
@@ -53,7 +53,7 @@ def create_request_task(client: ReadarrClient, title: str, author: str, target: 
                 book_status='error',
                 search_status='pending',
                 author_message='Author added' if current and current.author_status == 'success' else 'Author failed',
-                book_message=msg,
+                book_message='Requested book failed',
                 search_message='Search not started',
             )
 

@@ -17,12 +17,7 @@ class ReadarrClient:
             book_resource = await self._lookup_book(client, headers, title)
             if not book_resource:
                 raise ValueError(f'No Readarr book found for {title}')
-            payload = self._build_book_payload(book_resource, author_resource, goodreads_id)
-            add_response = await client.post(f'{self.target.base_url}/api/v1/book', headers=headers, json=payload)
-            if add_response.status_code >= 400:
-                raise ValueError(f'Readarr book add failed: {self._format_error(add_response)}')
-            added_book = add_response.json()
-            book_id = added_book.get('id') or book_resource.get('id')
+            book_id = await self._add_requested_book(client, headers, author_resource, book_resource, goodreads_id)
             if book_id is not None and author_resource.get('id') is not None:
                 await self._search_book(client, headers, author_resource['id'], book_id)
         return 'Author added, book added, search started'
@@ -69,32 +64,23 @@ class ReadarrClient:
     def _build_author_payload(self, lookup_author: dict, author_name: str, root_folder: str, quality_profile: int, metadata_profile: int) -> dict:
         author_id = lookup_author.get('id')
         path = f"{root_folder.rstrip('/')}/{self._sanitize(author_name)}"
-        books = self._collect_books_to_monitor(lookup_author, author_name)
         payload = {
             'authorName': lookup_author.get('authorName') or lookup_author.get('name') or author_name,
             'foreignAuthorId': lookup_author.get('foreignAuthorId'),
             'monitored': True,
-            'monitorNewItems': 'none',
+            'monitorNewItems': 'all',
             'qualityProfileId': quality_profile,
             'metadataProfileId': metadata_profile,
             'rootFolderPath': root_folder,
             'path': path,
             'addOptions': {
-                'monitor': 'specificBook',
-                'searchForMissingBooks': False,
-                'booksToMonitor': books,
+                'monitor': 'all',
+                'searchForMissingBooks': True,
             },
         }
         if author_id is not None:
             payload['id'] = author_id
         return payload
-
-    def _collect_books_to_monitor(self, lookup_author: dict, author_name: str) -> list[str]:
-        books = lookup_author.get('books') or []
-        for book in books:
-            if book.get('title'):
-                return [book['title']]
-        return [author_name]
 
     async def _lookup_book(self, client: httpx.AsyncClient, headers: dict[str, str], title: str) -> dict:
         lookup = await client.get(f'{self.target.base_url}/api/v1/book/lookup', headers=headers, params={'term': title})
@@ -104,6 +90,14 @@ class ReadarrClient:
         if not books:
             raise ValueError(f'No Readarr book found for {title}')
         return books[0]
+
+    async def _add_requested_book(self, client: httpx.AsyncClient, headers: dict[str, str], author: dict, book: dict, goodreads_id: str | None) -> int | None:
+        payload = self._build_book_payload(book, author, goodreads_id)
+        add_response = await client.post(f'{self.target.base_url}/api/v1/book', headers=headers, json=payload)
+        if add_response.status_code >= 400:
+            raise ValueError(f'Readarr book add failed: {self._format_error(add_response)}')
+        added_book = add_response.json()
+        return added_book.get('id') or book.get('id')
 
     async def _first_root_folder(self, client: httpx.AsyncClient, headers: dict[str, str]) -> str | None:
         response = await client.get(f'{self.target.base_url}/api/v1/rootfolder', headers=headers)
@@ -127,7 +121,7 @@ class ReadarrClient:
         return profiles[0].get('id') if profiles else None
 
     def _build_book_payload(self, book: dict, author: dict, goodreads_id: str | None) -> dict:
-        edition = (book.get('editions') or [{}])[0]
+        edition = self._pick_best_edition(book)
         payload = {
             'title': book.get('title'),
             'author': author,
@@ -143,6 +137,13 @@ class ReadarrClient:
             'editions': [self._normalize_edition(book, edition)],
         }
         return {k: v for k, v in payload.items() if v is not None}
+
+    def _pick_best_edition(self, book: dict) -> dict:
+        editions = book.get('editions') or []
+        for edition in editions:
+            if edition.get('foreignEditionId'):
+                return edition
+        return editions[0] if editions else {}
 
     def _normalize_edition(self, book: dict, edition: dict) -> dict:
         return {
