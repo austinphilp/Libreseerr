@@ -35,15 +35,21 @@ async def book_detail(request: Request, source: str, book_id: str):
     book = await get_book(book_id, source=source)
     if book is None:
         raise HTTPException(status_code=404, detail='Book not found')
-    return templates.TemplateResponse('book.html', {'request': request, 'settings': settings, 'targets': settings.targets(), 'book': book})
+    return templates.TemplateResponse('book.html', {'request': request, 'settings': settings, 'targets': settings.targets(), 'book': book, 'message': None, 'error': None})
 
 
-@app.post('/request')
-async def request_book(title: str = Form(...), author: str = Form(...), target_name: str = Form(...), goodreads_id: str | None = Form(default=None)):
+@app.post('/request', response_class=HTMLResponse)
+async def request_book(request: Request, title: str = Form(...), author: str = Form(...), target_name: str = Form(...), goodreads_id: str | None = Form(default=None), source: str = Form(default='google'), book_id: str = Form(default='')):
     settings = get_settings()
     target = next((t for t in settings.targets() if t.name == target_name), None)
     if target is None:
         raise HTTPException(status_code=404, detail='Readarr target not found')
     client = ReadarrClient(target)
-    await client.request_book(title=title, author=author, goodreads_id=goodreads_id)
-    return RedirectResponse(url='/', status_code=303)
+    message = None
+    error = None
+    try:
+        message = await client.request_book(title=title, author=author, goodreads_id=goodreads_id)
+    except Exception as exc:
+        error = str(exc)
+    book = {'id': book_id, 'source': source, 'title': title, 'author': author, 'description': '', 'thumbnail': '', 'isbn': goodreads_id}
+    return templates.TemplateResponse('book.html', {'request': request, 'settings': settings, 'targets': settings.targets(), 'book': book, 'message': message, 'error': error})
