@@ -17,7 +17,12 @@ class ReadarrClient:
             book_resource = await self._lookup_book(client, headers, title)
             if not book_resource:
                 raise ValueError(f'No Readarr book found for {title}')
-            book_id = await self._ensure_book_exists(client, headers, author_resource, book_resource, goodreads_id)
+            payload = self._build_book_payload(book_resource, author_resource, goodreads_id)
+            add_response = await client.post(f'{self.target.base_url}/api/v1/book', headers=headers, json=payload)
+            if add_response.status_code >= 400:
+                raise ValueError(f'Readarr book add failed: {self._format_error(add_response)}')
+            added_book = add_response.json()
+            book_id = added_book.get('id') or book_resource.get('id')
             if book_id is not None and author_resource.get('id') is not None:
                 await self._search_book(client, headers, author_resource['id'], book_id)
         return 'Author added, book added, search started'
@@ -64,31 +69,32 @@ class ReadarrClient:
     def _build_author_payload(self, lookup_author: dict, author_name: str, root_folder: str, quality_profile: int, metadata_profile: int) -> dict:
         author_id = lookup_author.get('id')
         path = f"{root_folder.rstrip('/')}/{self._sanitize(author_name)}"
+        books = self._collect_books_to_monitor(lookup_author, author_name)
         payload = {
             'authorName': lookup_author.get('authorName') or lookup_author.get('name') or author_name,
             'foreignAuthorId': lookup_author.get('foreignAuthorId'),
             'monitored': True,
-            'monitorNewItems': 'all',
+            'monitorNewItems': 'none',
             'qualityProfileId': quality_profile,
             'metadataProfileId': metadata_profile,
             'rootFolderPath': root_folder,
             'path': path,
             'addOptions': {
-                'monitor': 'all',
-                'searchForMissingBooks': True,
-                'booksToMonitor': [self._best_book_title(lookup_author, author_name)],
+                'monitor': 'specificBook',
+                'searchForMissingBooks': False,
+                'booksToMonitor': books,
             },
         }
         if author_id is not None:
             payload['id'] = author_id
         return payload
 
-    def _best_book_title(self, lookup_author: dict, author_name: str) -> str:
+    def _collect_books_to_monitor(self, lookup_author: dict, author_name: str) -> list[str]:
         books = lookup_author.get('books') or []
         for book in books:
             if book.get('title'):
-                return book['title']
-        return author_name
+                return [book['title']]
+        return [author_name]
 
     async def _lookup_book(self, client: httpx.AsyncClient, headers: dict[str, str], title: str) -> dict:
         lookup = await client.get(f'{self.target.base_url}/api/v1/book/lookup', headers=headers, params={'term': title})
@@ -120,47 +126,42 @@ class ReadarrClient:
         profiles = response.json()
         return profiles[0].get('id') if profiles else None
 
-    async def _ensure_book_exists(self, client: httpx.AsyncClient, headers: dict[str, str], author: dict, book: dict, goodreads_id: str | None) -> int | None:
-        existing = await client.get(f'{self.target.base_url}/api/v1/book', headers=headers, params={'authorId': author.get('id')})
-        if existing.status_code >= 400:
-            raise ValueError(f'Readarr book lookup failed: {self._format_error(existing)}')
-        existing_books = existing.json()
-        target_title = (book.get('title') or '').casefold()
-        for item in existing_books:
-            if item.get('title', '').casefold() == target_title:
-                return item.get('id')
-
-        lookup = await client.get(f'{self.target.base_url}/api/v1/book/lookup', headers=headers, params={'term': book.get('title')})
-        if lookup.status_code >= 400:
-            raise ValueError(f'Readarr book lookup failed: {self._format_error(lookup)}')
-        candidates = lookup.json()
-        candidate = candidates[0] if candidates else book
-
-        payload = self._build_minimal_book_payload(candidate, author, goodreads_id)
-        add_response = await client.post(f'{self.target.base_url}/api/v1/book', headers=headers, json=payload)
-        if add_response.status_code >= 400:
-            raise ValueError(f'Readarr book add failed: {self._format_error(add_response)}')
-        added_book = add_response.json()
-        return added_book.get('id') or payload.get('id')
-
-    def _build_minimal_book_payload(self, candidate: dict, author: dict, goodreads_id: str | None) -> dict:
-        book_id = candidate.get('id')
+    def _build_book_payload(self, book: dict, author: dict, goodreads_id: str | None) -> dict:
+        edition = (book.get('editions') or [{}])[0]
         payload = {
-            'id': book_id,
-            'title': candidate.get('title'),
+            'title': book.get('title'),
             'author': author,
             'authorId': author.get('id'),
-            'foreignBookId': goodreads_id or candidate.get('foreignBookId'),
-            'foreignEditionId': candidate.get('foreignEditionId'),
+            'foreignBookId': goodreads_id or book.get('foreignBookId'),
+            'foreignEditionId': edition.get('foreignEditionId') or book.get('foreignEditionId'),
             'monitored': False,
             'anyEditionOk': False,
             'addOptions': {
                 'addType': 'automatic',
                 'searchForNewBook': True,
-                'booksToMonitor': [candidate.get('title')] if candidate.get('title') else [],
             },
+            'editions': [self._normalize_edition(book, edition)],
         }
         return {k: v for k, v in payload.items() if v is not None}
+
+    def _normalize_edition(self, book: dict, edition: dict) -> dict:
+        return {
+            'foreignEditionId': edition.get('foreignEditionId') or book.get('foreignEditionId') or book.get('foreignBookId'),
+            'title': edition.get('title') or book.get('title'),
+            'language': edition.get('language'),
+            'overview': edition.get('overview') or book.get('overview'),
+            'format': edition.get('format'),
+            'isEbook': edition.get('isEbook', False),
+            'disambiguation': edition.get('disambiguation'),
+            'publisher': edition.get('publisher'),
+            'pageCount': edition.get('pageCount', book.get('pageCount', 0)),
+            'releaseDate': edition.get('releaseDate') or book.get('releaseDate'),
+            'images': edition.get('images') or book.get('images') or [],
+            'links': edition.get('links') or book.get('links') or [],
+            'ratings': edition.get('ratings') or book.get('ratings') or {'votes': 0, 'value': 0},
+            'monitored': False,
+            'manualAdd': True,
+        }
 
     def _sanitize(self, value: str) -> str:
         return ''.join(ch if ch.isalnum() or ch in {' ', '-', '_', '.', '(', ')'} else '_' for ch in value).strip().replace('  ', ' ')
