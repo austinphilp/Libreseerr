@@ -25,8 +25,12 @@
     .result img { width: 72px; height: 108px; object-fit: cover; border-radius: 10px; background: #111827; }
     .muted { color: #94a3b8; }
     .pill { display: inline-block; padding: 4px 10px; border-radius: 999px; background: rgba(124,58,237,.16); color: #c4b5fd; font-size: .82rem; margin-left: 8px; }
-    .targets { display: grid; gap: 12px; }
-    .target { padding: 16px; border-radius: 14px; background: #0b1220; border: 1px solid #243041; }
+    .targets, .history { display: grid; gap: 12px; }
+    .target, .history-item { padding: 16px; border-radius: 14px; background: #0b1220; border: 1px solid #243041; }
+    .status { font-size: .85rem; text-transform: uppercase; letter-spacing: .08em; }
+    .success { color: #86efac; }
+    .error { color: #fca5a5; }
+    .processing, .submitted { color: #fbbf24; }
     @media (max-width: 900px) { .grid, .hero { grid-template-columns: 1fr; flex-direction: column; } }
   </style>
 </head>
@@ -63,7 +67,20 @@
         </div>
       </div>
       <div class="panel">
-        <h2>Connected Readarrs</h2>
+        <h2>Request history</h2>
+        <div class="history">
+          {% for item in history %}
+            <div class="history-item">
+              <strong>{{ item.title }}</strong><br>
+              <span class="muted">{{ item.author }} · {{ item.target }}</span><br>
+              <span class="status {{ item.status }}">{{ item.status }}</span><br>
+              <span class="muted">{{ item.message }}</span>
+            </div>
+          {% else %}
+            <p class="muted">No requests yet.</p>
+          {% endfor %}
+        </div>
+        <h2 style="margin-top:20px">Connected Readarrs</h2>
         <div class="targets">
           {% for target in targets %}
             <div class="target">

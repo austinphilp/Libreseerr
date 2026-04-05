@@ -12,28 +12,35 @@ class ReadarrClient:
     async def request_book(self, title: str, author: str, goodreads_id: str | None = None) -> str:
         headers = {'X-Api-Key': self.target.api_key}
         async with httpx.AsyncClient(timeout=20.0) as client:
-            author_resource = await self._find_author(client, headers, author)
+            author_resource = await self._ensure_author(client, headers, author)
             book_resource = await self._find_book(client, headers, title)
             if not book_resource:
                 raise ValueError(f'No Readarr book found for {title}')
-
             payload = self._build_payload(title, author_resource, book_resource, goodreads_id)
             response = await client.post(f'{self.target.base_url}/api/v1/book', headers=headers, json=payload)
-
         if response.status_code >= 400:
             detail = response.text.strip() or response.reason_phrase
             raise ValueError(f'Readarr rejected request: {detail}')
-
         return 'Requested successfully'
 
-    async def _find_author(self, client: httpx.AsyncClient, headers: dict[str, str], author: str) -> dict:
-        response = await client.get(f'{self.target.base_url}/api/v1/author/lookup', headers=headers, params={'term': author})
+    async def _ensure_author(self, client: httpx.AsyncClient, headers: dict[str, str], author_name: str) -> dict:
+        response = await client.get(f'{self.target.base_url}/api/v1/author/lookup', headers=headers, params={'term': author_name})
         if response.status_code >= 400:
             raise ValueError(f'Readarr author lookup failed: {response.text.strip() or response.reason_phrase}')
         authors = response.json()
         if not authors:
-            raise ValueError(f'No Readarr author found for {author}')
-        return authors[0]
+            raise ValueError(f'No Readarr author found for {author_name}')
+
+        candidate = authors[0]
+        if candidate.get('id'):
+            current = await client.get(f'{self.target.base_url}/api/v1/author/{candidate["id"]}', headers=headers)
+            if current.status_code == 200:
+                return current.json()
+
+        create_response = await client.post(f'{self.target.base_url}/api/v1/author', headers=headers, json=candidate)
+        if create_response.status_code >= 400:
+            raise ValueError(f'Readarr author add failed: {create_response.text.strip() or create_response.reason_phrase}')
+        return create_response.json()
 
     async def _find_book(self, client: httpx.AsyncClient, headers: dict[str, str], title: str) -> dict | None:
         response = await client.get(f'{self.target.base_url}/api/v1/book/lookup', headers=headers, params={'term': title})
