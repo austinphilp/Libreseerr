@@ -4,13 +4,10 @@ from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
-from pydantic import BaseModel
-
-
 from .config import get_settings
 from .metadata import get_book, search_books
 from .readarr import ReadarrClient
-from .tasks import create_request_task, get_request_task, list_request_tasks, retry_request_task
+from .tasks import create_request_task, get_request_task, list_request_tasks, retry_request_task, update_quality_profile_for_request
 
 app = FastAPI(title='Libreseerr')
 templates = Jinja2Templates(directory='app/templates')
@@ -65,7 +62,24 @@ async def request_book(title: str = Form(...), author: str = Form(...), target_n
         raise HTTPException(status_code=404, detail='Readarr target not found')
     client = ReadarrClient(target)
     task = create_request_task(client, title=title, author=author, target=target_name, goodreads_id=goodreads_id)
-    return JSONResponse({'task_id': task.id, 'status': task.status, 'message': task.message, 'quality_profile_id': quality_profile_id})
+    update_quality_profile_for_request(task.id, quality_profile_id)
+    return {'task_id': task.id, 'status': task.status, 'message': task.message}
+
+
+@app.get('/request/{task_id}/status')
+async def request_status_json(task_id: str):
+    task = get_request_task(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail='Request not found')
+    return {'task_id': task.id, 'status': task.status, 'message': task.message, 'author_status': task.author_status, 'book_status': task.book_status, 'search_status': task.search_status, 'author_message': task.author_message, 'book_message': task.book_message, 'search_message': task.search_message}
+
+
+@app.post('/request/{task_id}/quality-profile')
+async def set_request_quality_profile(task_id: str, quality_profile_id: int = Form(...)):
+    task = update_quality_profile_for_request(task_id, quality_profile_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail='Request not found')
+    return {'task_id': task.id, 'quality_profile_id': quality_profile_id}
 
 
 @app.get('/book/{source}/{book_id}', response_class=HTMLResponse)

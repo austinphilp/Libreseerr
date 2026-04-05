@@ -61,6 +61,18 @@ def create_request_task(client: ReadarrClient, title: str, author: str, target: 
     return task
 
 
+def update_quality_profile_for_request(task_id: str, quality_profile_id: int) -> RequestTask | None:
+    task = _tasks.get(task_id)
+    if task is None:
+        return None
+    task.book_message = f'Quality profile selected: {quality_profile_id}'
+    return task
+
+
+def get_request_task(task_id: str) -> RequestTask | None:
+    return _tasks.get(task_id)
+
+
 def retry_request_task(client: ReadarrClient, task_id: str) -> RequestTask:
     previous = _tasks.get(task_id)
     if previous is None:
