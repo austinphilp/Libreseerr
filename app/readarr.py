@@ -83,7 +83,7 @@ class ReadarrClient:
         return payload
 
     async def _find_existing_book_id(self, client: httpx.AsyncClient, headers: dict[str, str], title: str, author: dict) -> int | None:
-        response = await client.get(f'{self.target.base_url}/api/v1/book', headers=headers, params={'authorId': author.get('id')})
+        response = await client.get(f'{self.target.base_url}/api/v1/book', headers=headers)
         if response.status_code >= 400:
             raise ValueError(f'Readarr book lookup failed: {self._format_error(response)}')
         books = response.json()
