@@ -26,8 +26,7 @@ class ReadarrClient:
 
     async def _search_requested_book(self, client: httpx.AsyncClient, headers: dict[str, str], book_id: int) -> None:
         response = await client.post(f'{self.target.base_url}/api/v1/command', headers=headers, json={
-            'name': 'BookSearch',
-            'bookIds': [book_id],
+            'name': 'MissingBookSearch',
         })
         if response.status_code >= 400:
             raise ValueError(f'Readarr book search failed: {self._format_error(response)}')
