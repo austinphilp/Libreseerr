@@ -14,6 +14,10 @@ Libreseerr is a book request management application for [Readarr](https://readar
 
 ![Libreseerr Requests Page](screenshots/requests.png)
 
+## Combatibility
+
+- Confirmed combatible with [faustvii/readarr](https://github.com/Faustvii/Readarr/pkgs/container/readarr)
+
 ## Installation
 
 ### Docker Run
@@ -24,7 +28,7 @@ docker run -d \
   -p 5000:5000 \
   -v libreseerr-data:/app/data \
   --restart unless-stopped \
-  libreseerr
+  ghcr.io/zamnzim/libreseerr:latest
 ```
 
 ### Docker Compose
@@ -32,7 +36,7 @@ docker run -d \
 ```yaml
 services:
   libreseerr:
-    image: libreseerr
+    iimage: ghcr.io/zamnzim/libreseerr:latest
     ports:
       - "5000:5000"
     volumes:
