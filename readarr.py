@@ -195,25 +195,43 @@ class ReadarrClient:
         )
         logger.info("Author for book '%s': %s (id=%s)", book_data.get("title"), added_author.get("authorName"), added_author.get("id"))
 
-        # Build a minimal payload — Readarr's validator chokes on the
-        # nested author object returned by /book/lookup, so we only
-        # send the fields it actually needs.
+        # Log the full lookup result for debugging
+        logger.info("Book lookup result keys: %s", list(book_data.keys()))
+        if book_data.get("editions"):
+            logger.info("Book lookup has %d editions", len(book_data["editions"]))
+            for i, ed in enumerate(book_data["editions"][:3]):
+                logger.info("  edition[%d] keys: %s", i, list(ed.keys()))
+
+        foreign_book_id = book_data.get("foreignBookId", "")
+        title = book_data.get("title", "Unknown")
+
+        # Build the edition list — Readarr needs at least one.
+        editions = []
+        raw_editions = book_data.get("editions") or []
+        for ed in raw_editions:
+            edition = {
+                "foreignEditionId": ed.get("foreignEditionId", foreign_book_id),
+                "monitored": True,
+            }
+            for key in ("asin", "isbn", "title", "publisher", "media", "name"):
+                if ed.get(key):
+                    edition[key] = ed[key]
+            editions.append(edition)
+        if not editions:
+            editions = [{"foreignEditionId": foreign_book_id, "monitored": True}]
+
         book_payload = {
-            "foreignBookId": book_data.get("foreignBookId", ""),
-            "title": book_data.get("title", "Unknown"),
+            "foreignBookId": foreign_book_id,
+            "title": title,
             "authorId": added_author.get("id"),
             "qualityProfileId": quality_profile_id,
-            "rootFolderPath": root_folder,
             "monitored": True,
+            "editions": editions,
             "addOptions": {
                 "addType": "automatic",
                 "searchForNewBook": True,
             },
         }
-        # Preserve editions from the lookup result if present (Readarr
-        # needs at least one edition to know which edition to download).
-        if book_data.get("editions"):
-            book_payload["editions"] = book_data["editions"]
 
         logger.info("Adding book payload: %s", json.dumps(book_payload, default=str))
 
