@@ -154,9 +154,10 @@ class ReadarrClient:
             "metadataProfileId": metadata_profile_id,
             "rootFolderPath": root_folder,
             "monitored": True,
+            "monitorNewItems": "none",
             "addOptions": {
-                "monitor": "all",
-                "searchForMissingBooks": True,
+                "monitor": "none",
+                "searchForMissingBooks": False,
             },
         }
         for key in ("images", "overview", "links", "genres", "ratings"):
@@ -239,7 +240,7 @@ class ReadarrClient:
             "author": added_author,
             "addOptions": {
                 "addType": "manual",
-                "searchForMissingBooks": True,
+                "searchForMissingBooks": False,
             },
         }
 
@@ -267,8 +268,7 @@ class ReadarrClient:
         result = resp.json()
         book_id = result.get("id")
 
-        # Readarr's addOptions.searchForMissingBooks may not trigger a
-        # search automatically.  Explicitly queue a BookSearch command.
+        # Trigger a search for just this book via the command API
         if book_id:
             search_resp = self.session.post(
                 self._url("/command"),
