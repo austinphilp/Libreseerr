@@ -195,19 +195,36 @@ class ReadarrClient:
         )
         logger.info("Author for book '%s': %s (id=%s)", book_data.get("title"), added_author.get("authorName"), added_author.get("id"))
 
-        # Log the full lookup result so we can see exactly what Readarr gives us
-        logger.info("Full book lookup result: %s", json.dumps(book_data, default=str)[:2000])
-
-        # Forward the full lookup result so Readarr gets all the fields
-        # it needs (especially editions).  Only override what we know.
-        book_payload = dict(book_data)
-        book_payload["authorId"] = added_author.get("id")
-        book_payload["qualityProfileId"] = quality_profile_id
-        book_payload["rootFolderPath"] = root_folder
-        book_payload["monitored"] = True
-        book_payload["addOptions"] = {
-            "addType": "automatic",
-            "searchForNewBook": True,
+        # Build a clean payload.  The lookup result contains computed
+        # properties (ratings, authorTitle, seriesTitle, etc.) and a
+        # broken `author` sub-object that crash BookResource validation.
+        # Only pass the fields Readarr actually expects on POST.
+        # The nested `author` object must have valid foreignAuthorId and
+        # rootFolderPath or the BookResource validator rejects it (400).
+        # Without `author` at all, the NRE returns (500).
+        book_payload = {
+            "foreignBookId": book_data.get("foreignBookId", ""),
+            "foreignEditionId": book_data.get("foreignEditionId", ""),
+            "title": book_data.get("title", "Unknown"),
+            "authorId": added_author.get("id"),
+            "qualityProfileId": quality_profile_id,
+            "rootFolderPath": root_folder,
+            "monitored": True,
+            "anyEditionOk": True,
+            "genres": book_data.get("genres") or [],
+            "links": book_data.get("links") or [],
+            "images": book_data.get("images") or [],
+            "author": {
+                "id": added_author.get("id"),
+                "authorName": added_author.get("authorName", ""),
+                "foreignAuthorId": added_author.get("foreignAuthorId", ""),
+                "qualityProfileId": quality_profile_id,
+                "rootFolderPath": root_folder,
+            },
+            "addOptions": {
+                "addType": "automatic",
+                "searchForNewBook": True,
+            },
         }
 
         logger.info("Adding book: %s", json.dumps(book_payload))
