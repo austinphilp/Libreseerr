@@ -153,6 +153,7 @@ class ReadarrClient:
             "qualityProfileId": quality_profile_id,
             "metadataProfileId": metadata_profile_id,
             "rootFolderPath": root_folder,
+            "monitored": True,
             "addOptions": {
                 "monitor": "all",
                 "searchForMissingBooks": True,
@@ -237,8 +238,8 @@ class ReadarrClient:
             "editions": [edition],
             "author": added_author,
             "addOptions": {
-                "addType": "automatic",
-                "searchForNewBook": True,
+                "addType": "manual",
+                "searchForMissingBooks": True,
             },
         }
 
@@ -263,7 +264,26 @@ class ReadarrClient:
             logger.error("POST /book failed (%d): %s", resp.status_code, resp.text[:500])
 
         resp.raise_for_status()
-        return resp.json()
+        result = resp.json()
+        book_id = result.get("id")
+
+        # Readarr's addOptions.searchForMissingBooks may not trigger a
+        # search automatically.  Explicitly queue a BookSearch command.
+        if book_id:
+            search_resp = self.session.post(
+                self._url("/command"),
+                json={"name": "BookSearch", "bookIds": [book_id]},
+                timeout=15,
+            )
+            if search_resp.ok:
+                logger.info("Triggered BookSearch for book id=%d", book_id)
+            else:
+                logger.warning(
+                    "BookSearch command failed (%d): %s",
+                    search_resp.status_code, search_resp.text[:200],
+                )
+
+        return result
 
     def get_queue(self) -> list:
         """Get current download queue."""
