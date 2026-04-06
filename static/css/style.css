@@ -381,6 +381,7 @@ body {
 .status-label.completed { color: var(--success); }
 .status-label.error { color: var(--error); }
 .status-label.downloading { color: var(--pink-light); }
+.status-label.processing { color: var(--warning); }
 .status-label.pending { color: var(--warning); }
 
 .request-error {

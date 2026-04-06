@@ -220,6 +220,25 @@ function renderRequest(req) {
     const progress = req.progress || 0;
     const fillClass = req.status === "completed" ? "complete" : req.status === "error" ? "error" : "";
 
+    let statusDisplay;
+    if (req.status === "processing" || req.status === "pending") {
+        statusDisplay = '<span class="status-label processing"><span class="spinner"></span> Processing</span>';
+    } else if (req.status === "completed") {
+        statusDisplay = `<span class="status-label completed">Completed</span>
+                <div class="progress-bar">
+                    <div class="progress-fill complete" style="width: 100%"></div>
+                </div>`;
+    } else if (req.status === "error") {
+        statusDisplay = `<span class="status-label error">Error</span>
+                ${req.error ? `<div class="request-error" title="${req.error}">${req.error}</div>` : ""}`;
+    } else {
+        // downloading
+        statusDisplay = `<span class="status-label downloading">Downloading</span>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: ${progress}%"></div>
+                </div>`;
+    }
+
     return `
         <div class="request-item">
             <img class="request-cover" src="${cover}" alt="${req.title}"
@@ -230,12 +249,7 @@ function renderRequest(req) {
                 <span class="request-server ${req.server_type}">${req.server_type}</span>
             </div>
             <div class="request-status">
-                <span class="status-label ${statusClass}">${req.status}</span>
-                ${req.status !== "error" ? `
-                    <div class="progress-bar">
-                        <div class="progress-fill ${fillClass}" style="width: ${progress}%"></div>
-                    </div>` : ""}
-                ${req.error ? `<div class="request-error" title="${req.error}">${req.error}</div>` : ""}
+                ${statusDisplay}
                 <button class="btn btn-small btn-danger delete-btn" data-id="${req.id}" style="margin-top: 0.4rem">Remove</button>
             </div>
         </div>`;

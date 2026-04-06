@@ -256,7 +256,7 @@ def create_request():
                 "Readarr match for '%s': title='%s', author=%s",
                 title, readarr_book.get("title"), json.dumps(readarr_book.get("author", {})),
             )
-            request_entry["status"] = "downloading"
+            request_entry["status"] = "processing"
         else:
             # Fallback: build data from Google Books
             readarr_book = {
@@ -268,7 +268,7 @@ def create_request():
                 "foreignBookId": isbn or book_data.get("id", ""),
             }
             app.logger.info("No Readarr match, using Google Books fallback for '%s' by '%s'", title, author_name)
-            request_entry["status"] = "downloading"
+            request_entry["status"] = "processing"
 
         result = client.add_book(readarr_book, quality_profile_id, root_folder)
         request_entry["readarr_book_id"] = result.get("id")
@@ -291,7 +291,7 @@ def get_requests():
 
 @app.route("/api/requests/refresh", methods=["POST"])
 def refresh_requests():
-    """Refresh the status of all pending/downloading requests."""
+    """Refresh the status of all processing/downloading requests."""
     with lock:
         for req in requests_history:
             if req["status"] in ("completed", "error"):
@@ -310,6 +310,8 @@ def refresh_requests():
                     status = q.get("status", "").lower()
                     size = q.get("size", 0)
                     size_left = q.get("sizeleft", 0)
+                    # Book is in the download queue
+                    req["status"] = "downloading"
                     if size > 0:
                         req["progress"] = round((1 - size_left / size) * 100)
                     if status == "completed":
