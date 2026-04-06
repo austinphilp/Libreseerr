@@ -1,5 +1,7 @@
 import json
+import logging
 import os
+import sys
 import threading
 import time
 from datetime import datetime
@@ -9,6 +11,14 @@ from flask import Flask, jsonify, render_template, request
 from readarr import ReadarrClient
 
 app = Flask(__name__)
+
+# Configure logging to stdout so it shows in docker logs
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)],
+)
+app.logger.setLevel(logging.DEBUG)
 
 CONFIG_FILE = os.path.join(os.path.dirname(__file__), "data", "config.json")
 REQUESTS_FILE = os.path.join(os.path.dirname(__file__), "data", "requests.json")
@@ -233,13 +243,26 @@ def create_request():
             readarr_books = client.lookup_by_title(f"{title} {author_name}")
 
         if readarr_books:
-            # Use the first Readarr match
-            readarr_book = readarr_books[0]
-            # Debug: log the full structure of the Readarr book lookup result
-            app.logger.info("Readarr book lookup result: %s", json.dumps(readarr_book, default=str))
+            # Use the Readarr match for the book ID, but always use our
+            # author name from Google Books (Readarr lookup may have empty
+            # or wrong author data).
+            matched = readarr_books[0]
+            readarr_author = matched.get("author", {})
+            readarr_book = {
+                "title": matched.get("title", title),
+                "author": {
+                    "authorName": readarr_author.get("authorName") or author_name,
+                    "foreignAuthorId": readarr_author.get("foreignAuthorId", ""),
+                },
+                "foreignBookId": matched.get("foreignBookId", isbn or book_data.get("id", "")),
+            }
+            app.logger.info(
+                "Readarr match for '%s': title='%s', author=%s",
+                title, readarr_book["title"], json.dumps(readarr_book["author"]),
+            )
             request_entry["status"] = "downloading"
         else:
-            # Fallback: build Readarr-compatible data from Google Books
+            # Fallback: build data from Google Books
             readarr_book = {
                 "title": title,
                 "author": {
@@ -248,7 +271,7 @@ def create_request():
                 },
                 "foreignBookId": isbn or book_data.get("id", ""),
             }
-            app.logger.info("No Readarr match found, using fallback: %s", json.dumps(readarr_book, default=str))
+            app.logger.info("No Readarr match, using Google Books fallback for '%s' by '%s'", title, author_name)
             request_entry["status"] = "downloading"
 
         result = client.add_book(readarr_book, quality_profile_id, root_folder)

@@ -1,6 +1,8 @@
-import requests
-from typing import Optional
+import json
 import logging
+from typing import Optional
+
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -74,8 +76,18 @@ class ReadarrClient:
 
     def _ensure_author(self, author_data: dict, quality_profile_id: int, root_folder: str) -> dict:
         """Ensure the author exists in Readarr. Returns the author record."""
-        author_name = author_data.get("authorName", "Unknown")
+        author_name = author_data.get("authorName", "")
         foreign_author_id = author_data.get("foreignAuthorId", "")
+
+        if not author_name or author_name == "Unknown":
+            raise ValueError(
+                f"Cannot add author: no valid author name provided. "
+                f"Got: {json.dumps(author_data)}"
+            )
+
+        logger.info(
+            "Ensuring author: name='%s', foreignAuthorId='%s'", author_name, foreign_author_id
+        )
 
         # Check existing authors in Readarr
         existing = self.session.get(self._url("/author"), timeout=15).json()
@@ -87,6 +99,7 @@ class ReadarrClient:
                 None,
             )
             if match:
+                logger.info("Author already exists (matched by ID): %s", match.get("authorName"))
                 return match
 
         # Match by name
@@ -95,25 +108,35 @@ class ReadarrClient:
             None,
         )
         if match:
+            logger.info("Author already exists (matched by name): %s", match.get("authorName"))
             return match
 
         # Author not in Readarr — need to add it
         # If we don't have a valid foreignAuthorId, look up the author by name
         # to get the correct metadata provider ID first.
         if not foreign_author_id:
+            logger.info("No foreignAuthorId, looking up author by name: '%s'", author_name)
             lookup = self.session.get(
                 self._url("/author/lookup"),
                 params={"term": author_name},
                 timeout=15,
             )
             if lookup.ok and lookup.json():
+                all_results = lookup.json()
+                for i, r in enumerate(all_results[:5]):
+                    logger.info(
+                        "  lookup[%d]: '%s' (foreignAuthorId='%s')",
+                        i, r.get("authorName", ""), r.get("foreignAuthorId", ""),
+                    )
+                # Prefer exact name match
                 exact = [
-                    a for a in lookup.json()
+                    a for a in all_results
                     if a.get("authorName", "").lower() == author_name.lower()
                 ]
                 if exact:
                     author_data = exact[0]
                     foreign_author_id = author_data.get("foreignAuthorId", "")
+                    logger.info("Using exact lookup match: foreignAuthorId='%s'", foreign_author_id)
                 else:
                     raise ValueError(
                         f"Could not find author '{author_name}' in Readarr metadata"
@@ -170,6 +193,7 @@ class ReadarrClient:
             quality_profile_id,
             root_folder,
         )
+        logger.info("Author for book '%s': %s (id=%s)", book_data.get("title"), added_author.get("authorName"), added_author.get("id"))
 
         # Add the book
         book_payload = {
@@ -187,10 +211,15 @@ class ReadarrClient:
                 "searchForNewBook": True,
             },
         }
+        logger.info("Adding book: %s", json.dumps(book_payload, default=str))
 
         resp = self.session.post(
             self._url("/book"), json=book_payload, timeout=30
         )
+
+        if not resp.ok:
+            logger.error("POST /book failed (%d): %s", resp.status_code, resp.text[:500])
+
         resp.raise_for_status()
         return resp.json()
 
