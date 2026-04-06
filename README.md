@@ -1,6 +1,6 @@
 # Libreseerr
 
-Libreseerr is a book request management application for [Readarr](https://readarr.com/). It provides a simple web interface for users to search for books and request ebook or audiobook downloads — similar to how [Overseerr](https://overseerr.dev/) and [Jellyseerr](https://github.com/Fallenbagel/jellyseerr) work for movies and TV shows with Sonarr/Radarr, but for books with Readarr.
+Libreseerr is a book request management application for [Readarr](https://readarr.com/). It provides a simple web interface for users to search for books and request ebook or audiobook downloads similar to how [Overseerr](https://overseerr.dev/) and [Jellyseerr](https://github.com/Fallenbagel/jellyseerr) work for movies and TV shows with Sonarr/Radarr, but for books with Readarr.
 
 ![Libreseerr Discover Page](screenshots/discover.png)
 
