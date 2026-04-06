@@ -195,45 +195,27 @@ class ReadarrClient:
         )
         logger.info("Author for book '%s': %s (id=%s)", book_data.get("title"), added_author.get("authorName"), added_author.get("id"))
 
-        # Log the full lookup result for debugging
-        logger.info("Book lookup result keys: %s", list(book_data.keys()))
-        if book_data.get("editions"):
-            logger.info("Book lookup has %d editions", len(book_data["editions"]))
-            for i, ed in enumerate(book_data["editions"][:3]):
-                logger.info("  edition[%d] keys: %s", i, list(ed.keys()))
-
         foreign_book_id = book_data.get("foreignBookId", "")
+        foreign_edition_id = book_data.get("foreignEditionId", foreign_book_id)
         title = book_data.get("title", "Unknown")
 
-        # Build the edition list — Readarr needs at least one.
-        editions = []
-        raw_editions = book_data.get("editions") or []
-        for ed in raw_editions:
-            edition = {
-                "foreignEditionId": ed.get("foreignEditionId", foreign_book_id),
-                "monitored": True,
-            }
-            for key in ("asin", "isbn", "title", "publisher", "media", "name"):
-                if ed.get(key):
-                    edition[key] = ed[key]
-            editions.append(edition)
-        if not editions:
-            editions = [{"foreignEditionId": foreign_book_id, "monitored": True}]
-
+        # Readarr expects a minimum set of fields.  Use anyEditionOk
+        # so the server picks the best available edition automatically.
         book_payload = {
             "foreignBookId": foreign_book_id,
+            "foreignEditionId": foreign_edition_id,
             "title": title,
             "authorId": added_author.get("id"),
             "qualityProfileId": quality_profile_id,
             "monitored": True,
-            "editions": editions,
+            "anyEditionOk": True,
             "addOptions": {
                 "addType": "automatic",
                 "searchForNewBook": True,
             },
         }
 
-        logger.info("Adding book payload: %s", json.dumps(book_payload, default=str))
+        logger.info("Adding book: foreignBookId='%s', foreignEditionId='%s'", foreign_book_id, foreign_edition_id)
 
         resp = self.session.post(
             self._url("/book"), json=book_payload, timeout=30
