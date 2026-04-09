@@ -10,90 +10,123 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <nav class="navbar">
-        <div class="nav-brand">
-            <img src="/static/LibreseerrLogo.png" alt="Libreseerr" class="nav-logo">
+    <!-- Sidebar Overlay (mobile) -->
+    <div id="sidebar-overlay" class="sidebar-overlay" onclick="closeSidebar()"></div>
+
+    <!-- Sidebar -->
+    <aside id="sidebar" class="sidebar">
+        <div class="sidebar-brand">
+            <img src="/static/LibreseerrLogo.png" alt="Libreseerr" class="sidebar-logo">
             <span>Libreseerr</span>
         </div>
-        <div class="nav-links">
-            <a href="#" class="nav-link active" data-page="search">Discover</a>
-            <a href="#" class="nav-link" data-page="requests">Requests</a>
-            <a href="#" class="nav-link" data-page="settings">Settings</a>
-        </div>
-    </nav>
+        <nav class="sidebar-nav">
+            <a href="#" class="sidebar-link active" data-page="search">
+                <svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                </svg>
+                <span>Discover</span>
+            </a>
+            <a href="#" class="sidebar-link" data-page="requests">
+                <svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                </svg>
+                <span>Requests</span>
+            </a>
+            <a href="#" class="sidebar-link" data-page="settings">
+                <svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                </svg>
+                <span>Settings</span>
+            </a>
+        </nav>
+    </aside>
 
-    <main class="container">
-        <!-- Search Page -->
-        <div id="page-search" class="page active">
-            <div class="search-box">
+    <!-- Main Content -->
+    <div class="main-wrapper">
+        <!-- Header -->
+        <header class="top-header">
+            <button class="hamburger" onclick="openSidebar()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/>
+                </svg>
+            </button>
+            <div class="header-search">
+                <svg class="header-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
                 <input type="text" id="search-input" placeholder="Search for books..." autocomplete="off">
-                <button id="search-btn" class="btn btn-primary">Search</button>
             </div>
-            <div id="search-results" class="results-grid"></div>
-        </div>
+        </header>
 
-        <!-- Requests Page -->
-        <div id="page-requests" class="page">
-            <div class="page-header">
-                <h2>Request History</h2>
-                <button id="refresh-btn" class="btn btn-secondary">Refresh Status</button>
+        <main class="container">
+            <!-- Search Page -->
+            <div id="page-search" class="page active">
+                <div id="search-results" class="results-grid"></div>
             </div>
-            <div id="requests-list" class="requests-list"></div>
-        </div>
 
-        <!-- Settings Page -->
-        <div id="page-settings" class="page">
-            <h2>Server Configuration</h2>
-            <div class="settings-grid">
-                <div class="settings-card">
-                    <h3>Ebook Server</h3>
-                    <div class="form-group">
-                        <label for="ebook-server-software">Server Software</label>
-                        <select id="ebook-server-software">
-                            <option value="readarr">Readarr</option>
-                            <option value="bookshelf">Bookshelf</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="ebook-url">URL</label>
-                        <input type="text" id="ebook-url" placeholder="http://192.168.1.100:8787">
-                    </div>
-                    <div class="form-group">
-                        <label for="ebook-api">API Key</label>
-                        <input type="password" id="ebook-api" placeholder="Readarr API Key">
-                    </div>
-                    <div class="btn-group">
-                        <button class="btn btn-secondary" onclick="testConnection('ebook')">Test</button>
-                        <button class="btn btn-primary" onclick="saveConfig('ebook')">Save</button>
-                    </div>
-                    <div id="ebook-status" class="status-msg"></div>
+            <!-- Requests Page -->
+            <div id="page-requests" class="page">
+                <div class="page-header">
+                    <h2>Request History</h2>
+                    <button id="refresh-btn" class="btn btn-secondary">Refresh Status</button>
                 </div>
-                <div class="settings-card">
-                    <h3>Audiobook Server</h3>
-                    <div class="form-group">
-                        <label for="audiobook-server-software">Server Software</label>
-                        <select id="audiobook-server-software">
-                            <option value="readarr">Readarr</option>
-                            <option value="bookshelf">Bookshelf</option>
-                        </select>
+                <div id="requests-list" class="requests-list"></div>
+            </div>
+
+            <!-- Settings Page -->
+            <div id="page-settings" class="page">
+                <h2>Server Configuration</h2>
+                <div class="settings-grid">
+                    <div class="settings-card">
+                        <h3>Ebook Server</h3>
+                        <div class="form-group">
+                            <label for="ebook-server-software">Server Software</label>
+                            <select id="ebook-server-software">
+                                <option value="readarr">Readarr</option>
+                                <option value="bookshelf">Bookshelf</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="ebook-url">URL</label>
+                            <input type="text" id="ebook-url" placeholder="http://192.168.1.100:8787">
+                        </div>
+                        <div class="form-group">
+                            <label for="ebook-api">API Key</label>
+                            <input type="password" id="ebook-api" placeholder="Readarr API Key">
+                        </div>
+                        <div class="btn-group">
+                            <button class="btn btn-secondary" onclick="testConnection('ebook')">Test</button>
+                            <button class="btn btn-primary" onclick="saveConfig('ebook')">Save</button>
+                        </div>
+                        <div id="ebook-status" class="status-msg"></div>
                     </div>
-                    <div class="form-group">
-                        <label for="audiobook-url">URL</label>
-                        <input type="text" id="audiobook-url" placeholder="http://192.168.1.100:8788">
+                    <div class="settings-card">
+                        <h3>Audiobook Server</h3>
+                        <div class="form-group">
+                            <label for="audiobook-server-software">Server Software</label>
+                            <select id="audiobook-server-software">
+                                <option value="readarr">Readarr</option>
+                                <option value="bookshelf">Bookshelf</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="audiobook-url">URL</label>
+                            <input type="text" id="audiobook-url" placeholder="http://192.168.1.100:8788">
+                        </div>
+                        <div class="form-group">
+                            <label for="audiobook-api">API Key</label>
+                            <input type="password" id="audiobook-api" placeholder="Readarr API Key">
+                        </div>
+                        <div class="btn-group">
+                            <button class="btn btn-secondary" onclick="testConnection('audiobook')">Test</button>
+                            <button class="btn btn-primary" onclick="saveConfig('audiobook')">Save</button>
+                        </div>
+                        <div id="audiobook-status" class="status-msg"></div>
                     </div>
-                    <div class="form-group">
-                        <label for="audiobook-api">API Key</label>
-                        <input type="password" id="audiobook-api" placeholder="Readarr API Key">
-                    </div>
-                    <div class="btn-group">
-                        <button class="btn btn-secondary" onclick="testConnection('audiobook')">Test</button>
-                        <button class="btn btn-primary" onclick="saveConfig('audiobook')">Save</button>
-                    </div>
-                    <div id="audiobook-status" class="status-msg"></div>
                 </div>
             </div>
-        </div>
-    </main>
+        </main>
+    </div>
 
     <!-- Download Modal -->
     <div id="download-modal" class="modal">

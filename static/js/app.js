@@ -2,25 +2,35 @@
 let currentModalBook = null;
 let selectedServer = "ebook";
 
+// Sidebar
+function openSidebar() {
+    document.getElementById("sidebar").classList.add("open");
+    document.getElementById("sidebar-overlay").classList.add("active");
+}
+
+function closeSidebar() {
+    document.getElementById("sidebar").classList.remove("open");
+    document.getElementById("sidebar-overlay").classList.remove("active");
+}
+
 // Navigation
-document.querySelectorAll(".nav-link").forEach((link) => {
+document.querySelectorAll(".sidebar-link").forEach((link) => {
     link.addEventListener("click", (e) => {
         e.preventDefault();
-        document.querySelectorAll(".nav-link").forEach((l) => l.classList.remove("active"));
+        document.querySelectorAll(".sidebar-link").forEach((l) => l.classList.remove("active"));
         link.classList.add("active");
         document.querySelectorAll(".page").forEach((p) => p.classList.remove("active"));
         const pageId = "page-" + link.dataset.page;
         document.getElementById(pageId).classList.add("active");
         if (link.dataset.page === "requests") loadRequests();
         if (link.dataset.page === "settings") loadConfig();
+        closeSidebar();
     });
 });
 
 // Search
 const searchInput = document.getElementById("search-input");
-const searchBtn = document.getElementById("search-btn");
 
-searchBtn.addEventListener("click", doSearch);
 searchInput.addEventListener("keydown", (e) => { if (e.key === "Enter") doSearch(); });
 
 let searchTimeout;
@@ -32,6 +42,11 @@ searchInput.addEventListener("input", () => {
 async function doSearch() {
     const query = searchInput.value.trim();
     const grid = document.getElementById("search-results");
+
+    // Make sure we're on the search page
+    if (!document.getElementById("page-search").classList.contains("active")) {
+        document.querySelector('[data-page="search"]').click();
+    }
 
     if (!query) {
         grid.innerHTML = '<div class="empty-state">Search for books by title, author, or ISBN</div>';
@@ -68,13 +83,17 @@ function renderBookCard(book) {
     if (book.author?.images?.length) cover = book.author.images[0].url;
     if (!cover && book.images?.length) cover = book.images[0].url;
     if (!cover && book.cover) cover = book.cover;
-    if (!cover) cover = "https://via.placeholder.com/200x300/2d2030/e85d9a?text=No+Cover";
+    if (!cover) cover = "https://via.placeholder.com/200x300/1f2937/ec4899?text=No+Cover";
     const bookJson = JSON.stringify(book).replace(/"/g, "&quot;");
 
     return `
         <div class="book-card" data-book="${bookJson}">
             <img class="book-cover" src="${cover}" alt="${title}" loading="lazy"
-                 onerror="this.src='https://via.placeholder.com/200x300/2d2030/e85d9a?text=No+Cover'">
+                 onerror="this.src='https://via.placeholder.com/200x300/1f2937/ec4899?text=No+Cover'">
+            <div class="book-overlay">
+                <div class="book-overlay-title">${title}</div>
+                <div class="book-overlay-author">${author}${year ? " (" + year + ")" : ""}</div>
+            </div>
             <div class="book-info">
                 <div class="book-title" title="${title}">${title}</div>
                 <div class="book-author">${author}</div>
@@ -215,7 +234,7 @@ async function loadRequests() {
 }
 
 function renderRequest(req) {
-    const cover = req.cover_url || "https://via.placeholder.com/50x75/2d2030/e85d9a?text=N/A";
+    const cover = req.cover_url || "https://via.placeholder.com/50x75/1f2937/ec4899?text=N/A";
     const statusClass = req.status;
     const progress = req.progress || 0;
     const fillClass = req.status === "completed" ? "complete" : req.status === "error" ? "error" : "";
@@ -242,7 +261,7 @@ function renderRequest(req) {
     return `
         <div class="request-item">
             <img class="request-cover" src="${cover}" alt="${req.title}"
-                 onerror="this.src='https://via.placeholder.com/50x75/2d2030/e85d9a?text=N/A'">
+                 onerror="this.src='https://via.placeholder.com/50x75/1f2937/ec4899?text=N/A'">
             <div class="request-details">
                 <div class="request-title">${req.title}</div>
                 <div class="request-meta">${req.author || ""}</div>
@@ -343,3 +362,7 @@ document.getElementById("download-modal").addEventListener("click", (e) => {
 
 // Load config on page load
 loadConfig();
+
+// Show initial empty state
+document.getElementById("search-results").innerHTML =
+    '<div class="empty-state">Search for books by title, author, or ISBN</div>';
