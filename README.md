@@ -4,27 +4,29 @@
 
 # Libreseerr
 
-Libreseerr is a book request management application for [Readarr](https://readarr.com/) and Readarr forks like [Bookshelf](https://github.com/pennydreadful/bookshelf). It provides a simple web interface for users to search for books and request ebook or audiobook downloads similar to how [Seerr](https://github.com/seerr-team/seerr) works for movies and TV shows with Sonarr/Radarr, but for books with Readarr or Readarr Forks.
+Libreseerr is a book request management application for [Readarr](https://readarr.com/), Readarr forks like [Bookshelf](https://github.com/pennydreadful/bookshelf), and [LazyLibrarian](https://gitlab.com/LazyLibrarian/LazyLibrarian). It provides a simple web interface for users to search for books and request ebook or audiobook downloads similar to how [Seerr](https://github.com/seerr-team/seerr) works for movies and TV shows with Sonarr/Radarr, but for books with Readarr, Readarr forks, or LazyLibrarian.
 
 ![Libreseerr Discover Page](screenshots/discover.png)
 
 ## Features
 
 - Search for books by title, author, or ISBN
-- Request ebooks or audiobooks from separate Readarr or Bookshelf instances
+- Request ebooks or audiobooks from separate Readarr, Bookshelf, or LazyLibrarian instances
 - Track download progress with real-time status updates
-- View quality profiles and root folders from your Readarr or Bookshelf server
+- View quality profiles and root folders from your configured server
 - Manage and remove requests from a dedicated requests page
 - User authentication with session management
 - Admin-only user management (create, edit, delete users)
 
 ![Libreseerr Requests Page](screenshots/requests.png)
 
-## Combatibility
+## Compatibility
 
-- Confirmed combatible with [faustvii/readarr](https://github.com/Faustvii/Readarr/pkgs/container/readarr)
+- Confirmed compatible with [faustvii/readarr](https://github.com/Faustvii/Readarr/pkgs/container/readarr)
 
-- Confirmed combatible with [penndydreadful/bookshelf](https://github.com/pennydreadful/bookshelf)
+- Confirmed compatible with [penndydreadful/bookshelf](https://github.com/pennydreadful/bookshelf)
+
+- Confirmed compatible with [LazyLibrarian](https://gitlab.com/LazyLibrarian/LazyLibrarian)
 
 ## Installation
 
@@ -91,10 +93,12 @@ On first launch, a default admin account is created with the following credentia
 
 **Change the default password immediately** from the **Users** page after logging in.
 
-Log in with these credentials to access the web UI. The **Settings** page (admin only) lets you configure your Readarr instances:
+Log in with these credentials to access the web UI. The **Settings** page (admin only) lets you configure your server instances:
 
-- **Ebook Server** - URL and API key for your Readarr instance serving ebooks
-- **Audiobook Server** - URL and API key for your Readarr instance serving audiobooks
+- **Ebook Server** - URL and API key for your Readarr, Bookshelf, or LazyLibrarian instance serving ebooks
+- **Audiobook Server** - URL and API key for your Readarr, Bookshelf, or LazyLibrarian instance serving audiobooks
+
+Select the **Server Software** dropdown to choose between Readarr, Bookshelf, or LazyLibrarian for each server type.
 
 Click **Test Connection** to verify each server is reachable, then **Save**.
 
@@ -107,15 +111,15 @@ Click **Test Connection** to verify each server is reachable, then **Save**.
 3. Click a book card to open the download dialog.
 4. Select **ebook** or **audiobook**, choose a quality profile and root folder, then click **Download**.
 5. Switch to the **Requests** page to monitor progress.
-6. Click **Refresh Status** to poll Readarr for the latest download status.
+6. Click **Refresh Status** to poll your server for the latest download status.
 
 Status indicators on the Requests page:
 
 | Status | Meaning |
 |---|---|
-| **Processing** | Book has been sent to Readarr but is not yet in the download queue |
-| **Downloading** | Book is actively downloading in Readarr (progress bar shown) |
-| **Completed** | Download finished and file is available in Readarr |
+| **Processing** | Book has been sent to the server but is not yet in the download queue |
+| **Downloading** | Book is actively downloading (progress bar shown) |
+| **Completed** | Download finished and file is available in the server |
 | **Error** | Download failed (error message shown) |
 
 ## User Management
@@ -146,13 +150,13 @@ LDAP Users are also supported via Users > Advanced.
 | `PYTHONUNBUFFERED` | Ensures Python logs appear immediately in container output | `1` |
 | `SECRET_KEY` | Flask session secret key. Set this to a stable value in production | Auto-generated on first run |
 
-All application configuration (Readarr URLs and API keys) is managed through the web UI and stored in `/app/data/config.json`.
+All application configuration (server URLs, API keys, and server software type) is managed through the web UI and stored in `/app/data/config.json`.
 
 ## Data Persistence
 
 Application data is stored in `/app/data/` and includes:
 
-- `config.json` - Readarr server configuration
+- `config.json` - Server configuration (Readarr, Bookshelf, or LazyLibrarian)
 - `requests.json` - Request history
 - `users.json` - User accounts (passwords are hashed)
 - `secret_key` - Auto-generated session signing key (only created if `SECRET_KEY` is not set via environment)
