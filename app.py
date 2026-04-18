@@ -674,40 +674,38 @@ def create_request():
     }
 
     try:
-        # First, try to find the book in Readarr via ISBN lookup
+        # Try to find the book via the configured server's own lookup.
+        # The server requires its own metadata ID (e.g. Goodreads) as
+        # foreignBookId — Open Library IDs will always be rejected.
         readarr_books = []
         if isbn:
             readarr_books = client.lookup_by_isbn(isbn)
         if not readarr_books:
             readarr_books = client.search_books(f"{title} {author_name}")
+        if not readarr_books:
+            # Retry with title only — combined queries sometimes miss
+            readarr_books = client.search_books(title)
 
-        if readarr_books:
-            # Use the full Readarr lookup result — it has the correct
-            # editions, images, links, etc. that Readarr expects.
-            # We only override the author if Readarr returned empty data.
-            readarr_book = readarr_books[0]
-            if not readarr_book.get("author", {}).get("authorName"):
-                readarr_book["author"] = {
-                    "authorName": author_name,
-                    "foreignAuthorId": "",
-                }
-            app.logger.info(
-                "Readarr match for '%s': title='%s', author=%s",
-                title, readarr_book.get("title"), json.dumps(readarr_book.get("author", {})),
+        if not readarr_books:
+            raise ValueError(
+                f"'{title}' by {author_name} was not found in the configured "
+                f"server's catalog. Try searching for it directly in your "
+                f"Readarr/Bookshelf instance to confirm it's available."
             )
-            request_entry["status"] = "processing"
-        else:
-            # Fallback: build data from Open Library
-            readarr_book = {
-                "title": title,
-                "author": {
-                    "authorName": author_name,
-                    "foreignAuthorId": "",
-                },
-                "foreignBookId": isbn or book_data.get("id", ""),
+
+        # Use the full server lookup result — it has the correct metadata
+        # IDs, editions, images, etc. that the server expects.
+        readarr_book = readarr_books[0]
+        if not readarr_book.get("author", {}).get("authorName"):
+            readarr_book["author"] = {
+                "authorName": author_name,
+                "foreignAuthorId": "",
             }
-            app.logger.info("No Readarr match, using Open Library fallback for '%s' by '%s'", title, author_name)
-            request_entry["status"] = "processing"
+        app.logger.info(
+            "Server match for '%s': title='%s', author=%s",
+            title, readarr_book.get("title"), json.dumps(readarr_book.get("author", {})),
+        )
+        request_entry["status"] = "processing"
 
         result = client.add_book(readarr_book, quality_profile_id, root_folder)
         request_entry["readarr_book_id"] = result.get("id")
