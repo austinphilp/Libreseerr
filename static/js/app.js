@@ -4,7 +4,8 @@ let selectedServer = "ebook";
 let currentUser = null;
 let editingUsername = null;
 let serverConfig = { ebook: { configured: false }, audiobook: { configured: false } };
-let requestsByTitle = {}; // lowercase title → request status
+let requestsByTitle = {}; // lowercase title → request status (libreseerr history)
+let downloadedTitles = new Set(); // lowercase titles confirmed downloaded in Readarr/Bookshelf
 
 // ─── Auth ───
 
@@ -121,8 +122,7 @@ async function doSearch() {
         grid.innerHTML = data.map(renderBookCard).join("");
         grid.querySelectorAll(".book-card").forEach((card) => {
             const book = JSON.parse(card.dataset.book);
-            const status = requestsByTitle[book.title?.toLowerCase()];
-            if (status === "completed") return; // already downloaded — no click
+            if (downloadedTitles.has(book.title?.toLowerCase())) return; // already in library
             card.addEventListener("click", () => openDownloadModal(book));
         });
     } catch (err) {
@@ -141,13 +141,15 @@ function renderBookCard(book) {
     if (!cover) cover = "https://via.placeholder.com/200x300/1f2937/ec4899?text=No+Cover";
     const bookJson = JSON.stringify(book).replace(/"/g, "&quot;");
 
-    const status = requestsByTitle[title.toLowerCase()];
-    const statusBadge = status === "completed"
+    const key = title.toLowerCase();
+    const isDownloaded = downloadedTitles.has(key);
+    const requestStatus = !isDownloaded ? requestsByTitle[key] : null;
+    const statusBadge = isDownloaded
         ? '<div class="book-status-badge downloaded">Downloaded</div>'
-        : status
-        ? `<div class="book-status-badge in-progress">${status.charAt(0).toUpperCase() + status.slice(1)}</div>`
+        : requestStatus
+        ? `<div class="book-status-badge in-progress">${requestStatus.charAt(0).toUpperCase() + requestStatus.slice(1)}</div>`
         : "";
-    const cardClass = status === "completed" ? "book-card book-card--downloaded" : "book-card";
+    const cardClass = isDownloaded ? "book-card book-card--downloaded" : "book-card";
 
     return `
         <div class="${cardClass}" data-book="${bookJson}">
@@ -268,7 +270,8 @@ document.getElementById("confirm-download-btn").addEventListener("click", async 
         if (data.error) {
             alert("Error: " + data.error);
         } else {
-            requestsByTitle[data.title?.toLowerCase()] = data.status || "processing";
+            const titleKey = data.title?.toLowerCase();
+            if (titleKey) requestsByTitle[titleKey] = data.status || "processing";
             closeModal();
             // Switch to requests page
             document.querySelector('[data-page="requests"]').click();
@@ -707,10 +710,21 @@ window.testLDAP = async function () {
 
 // ─── Init ───
 
+async function loadLibrary() {
+    try {
+        const resp = await fetch("/api/library");
+        const titles = await resp.json();
+        downloadedTitles = new Set(titles);
+    } catch {
+        // non-fatal — badges just won't show
+    }
+}
+
 // Load current user first, then the rest
 loadCurrentUser().then(() => {
     loadConfig();
     loadRequests();
+    loadLibrary();
     document.getElementById("search-results").innerHTML =
         '<div class="empty-state">Search for books by title, author, or ISBN</div>';
 });

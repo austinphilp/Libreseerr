@@ -532,6 +532,22 @@ def update_config():
     return jsonify({"success": True})
 
 
+@app.route("/api/library")
+@login_required
+def get_library():
+    """Return the set of downloaded book titles across all configured servers."""
+    titles = set()
+    for server_type in ("ebook", "audiobook"):
+        client = get_client(server_type)
+        if not client:
+            continue
+        try:
+            titles |= client.get_downloaded_titles()
+        except Exception as e:
+            app.logger.warning("Failed to fetch library for %s: %s", server_type, e)
+    return jsonify(list(titles))
+
+
 @app.route("/api/config/test", methods=["POST"])
 @admin_required
 def test_config():
