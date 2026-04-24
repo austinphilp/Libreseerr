@@ -159,6 +159,13 @@ class LazyLibrarianClient:
                     }
         return None
 
+    def get_books(self) -> list:
+        """Get all books from the LazyLibrarian library."""
+        result = self._get("getBooks")
+        if not isinstance(result, list):
+            return []
+        return result
+
     def get_history(self) -> list:
         """Get snatched/download history."""
         result = self._get("getSnatched")

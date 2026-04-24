@@ -603,6 +603,25 @@ body.is-admin .sidebar-role {
 .request-server.ebook { background: rgba(236, 72, 153, 0.15); color: var(--pink-light); }
 .request-server.audiobook { background: rgba(168, 85, 247, 0.15); color: #c084fc; }
 
+.book-badges {
+    display: flex;
+    gap: 0.3rem;
+    margin-top: 0.3rem;
+    flex-wrap: wrap;
+}
+.book-badge {
+    display: inline-block;
+    padding: 0.1rem 0.4rem;
+    border-radius: 0.25rem;
+    font-size: 0.6rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+.book-badge.ebook { background: rgba(236, 72, 153, 0.15); color: var(--pink-light); }
+.book-badge.audiobook { background: rgba(168, 85, 247, 0.15); color: #c084fc; }
+.book-badge.ebook-requested { background: rgba(236, 72, 153, 0.08); color: var(--pink-light); opacity: 0.7; }
+.book-badge.audiobook-requested { background: rgba(168, 85, 247, 0.08); color: #c084fc; opacity: 0.7; }
+
 .request-status { text-align: right; flex-shrink: 0; }
 
 .progress-bar {

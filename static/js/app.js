@@ -3,6 +3,7 @@ let currentModalBook = null;
 let selectedServer = "ebook";
 let currentUser = null;
 let editingUsername = null;
+let cachedAvailability = null;
 
 const DISCOVERY_CATEGORIES = [
     { key: "new_releases", title: "New Releases" },
@@ -139,6 +140,7 @@ async function doSearch() {
         grid.querySelectorAll(".book-card").forEach((card) => {
             card.addEventListener("click", () => openDownloadModal(JSON.parse(card.dataset.book)));
         });
+        fetchAvailability().then(applyAvailabilityBadges);
     } catch (err) {
         grid.innerHTML = `<div class="empty-state">Error: ${err.message}</div>`;
     }
@@ -169,6 +171,52 @@ function renderBookCard(book) {
                 ${year ? `<div class="book-year">${year}</div>` : ""}
             </div>
         </div>`;
+}
+
+async function fetchAvailability() {
+    if (cachedAvailability) return cachedAvailability;
+    try {
+        const resp = await fetch("/api/availability");
+        cachedAvailability = await resp.json();
+    } catch {
+        cachedAvailability = { ebook: { isbns: [], titles: [] }, audiobook: { isbns: [], titles: [] } };
+    }
+    return cachedAvailability;
+}
+
+function applyAvailabilityBadges(availability) {
+    document.querySelectorAll(".book-card").forEach((card) => {
+        if (card.querySelector(".book-badges")) return;
+        let book;
+        try { book = JSON.parse(card.dataset.book); } catch { return; }
+        const isbn = book.isbn_13 || book.isbn_10 || book.isbn13 || book.isbn10 || "";
+        const title = (book.title || "").toLowerCase();
+
+        const hasEbook = (isbn && availability.ebook.isbns.includes(isbn)) ||
+            (title && availability.ebook.titles.includes(title));
+        const hasAudiobook = (isbn && availability.audiobook.isbns.includes(isbn)) ||
+            (title && availability.audiobook.titles.includes(title));
+        const ebookRequested = availability.ebook_requests &&
+            ((isbn && availability.ebook_requests.isbns.includes(isbn)) ||
+            (title && availability.ebook_requests.titles.includes(title)));
+        const audiobookRequested = availability.audiobook_requests &&
+            ((isbn && availability.audiobook_requests.isbns.includes(isbn)) ||
+            (title && availability.audiobook_requests.titles.includes(title)));
+
+        // "Requested" takes priority over "available" for the same server type
+        const showEbook = ebookRequested ? "requested" : (hasEbook ? "available" : null);
+        const showAudiobook = audiobookRequested ? "requested" : (hasAudiobook ? "available" : null);
+
+        if (!showEbook && !showAudiobook) return;
+
+        let html = '<div class="book-badges">';
+        if (showEbook === "available") html += '<span class="book-badge ebook">eBook ✓</span>';
+        else if (showEbook === "requested") html += '<span class="book-badge ebook-requested">eBook Requested</span>';
+        if (showAudiobook === "available") html += '<span class="book-badge audiobook">Audiobook ✓</span>';
+        else if (showAudiobook === "requested") html += '<span class="book-badge audiobook-requested">Audiobook Requested</span>';
+        html += '</div>';
+        card.querySelector(".book-info").insertAdjacentHTML("beforeend", html);
+    });
 }
 
 function renderDiscoveryRow(category) {
@@ -217,6 +265,7 @@ async function loadDiscovery() {
             openDownloadModal(JSON.parse(card.dataset.book));
         });
     });
+    fetchAvailability().then(applyAvailabilityBadges);
 }
 
 // ─── Download Modal ───

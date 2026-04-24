@@ -685,6 +685,83 @@ def search_books():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/availability")
+@login_required
+def check_availability():
+    """Check which books are already on the configured ebook/audiobook servers."""
+    result = {"ebook": {"isbns": [], "titles": []}, "audiobook": {"isbns": [], "titles": []}}
+
+    for server_type in ("ebook", "audiobook"):
+        client = get_client(server_type)
+        if not client:
+            continue
+        try:
+            books = client.get_books()
+            isbns = set()
+            titles = set()
+            for book in books:
+                title = ""
+                # Readarr/Bookshelf format: editions array with isbn fields
+                if isinstance(book.get("editions"), list):
+                    for edition in book["editions"]:
+                        for key in ("isbn13", "isbn_13"):
+                            val = edition.get(key, "")
+                            if val:
+                                isbns.add(val)
+                        for key in ("isbn10", "isbn_10"):
+                            val = edition.get(key, "")
+                            if val:
+                                isbns.add(val)
+                    # Also check top-level isbn fields
+                    for key in ("isbn13", "isbn_13", "isbn10", "isbn_10"):
+                        val = book.get(key, "")
+                        if val:
+                            isbns.add(val)
+                    title = book.get("title", "")
+                # LazyLibrarian format: flat dicts with bookisbn, bookname
+                else:
+                    isbn = book.get("bookisbn", book.get("isbn", ""))
+                    if isbn:
+                        isbns.add(isbn)
+                    title = book.get("bookname", book.get("title", ""))
+                if title:
+                    titles.add(title.lower())
+            result[server_type] = {
+                "isbns": list(isbns),
+                "titles": list(titles),
+            }
+        except Exception as e:
+            app.logger.warning("Failed to get books from %s: %s", server_type, e)
+
+    # Also include books with active requests (pending/processing/downloading)
+    active_statuses = {"pending", "processing", "downloading"}
+    requests_by_type = {"ebook": {"isbns": set(), "titles": set()}, "audiobook": {"isbns": set(), "titles": set()}}
+    with lock:
+        for req in requests_history:
+            if req.get("status") not in active_statuses:
+                continue
+            server = req.get("server_type", "")
+            if server not in requests_by_type:
+                continue
+            isbn = req.get("isbn", "")
+            if isbn:
+                requests_by_type[server]["isbns"].add(isbn)
+            title = req.get("title", "")
+            if title:
+                requests_by_type[server]["titles"].add(title.lower())
+
+    result["ebook_requests"] = {
+        "isbns": list(requests_by_type["ebook"]["isbns"]),
+        "titles": list(requests_by_type["ebook"]["titles"]),
+    }
+    result["audiobook_requests"] = {
+        "isbns": list(requests_by_type["audiobook"]["isbns"]),
+        "titles": list(requests_by_type["audiobook"]["titles"]),
+    }
+
+    return jsonify(result)
+
+
 @app.route("/api/profiles/<server_type>")
 @login_required
 def get_profiles(server_type):
@@ -742,6 +819,7 @@ def create_request():
         "cover_url": cover_url,
         "server_type": server_type,
         "quality_profile_id": quality_profile_id,
+        "isbn": isbn,
         "status": "pending",
         "progress": 0,
         "error": None,
