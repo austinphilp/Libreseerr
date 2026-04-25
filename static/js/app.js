@@ -87,7 +87,7 @@ document.querySelectorAll(".sidebar-link").forEach((link) => {
         document.getElementById(pageId).classList.add("active");
         if (link.dataset.page === "requests") loadRequests();
         if (link.dataset.page === "settings") loadConfig();
-        if (link.dataset.page === "users") { loadUsers(); loadLDAP(); }
+        if (link.dataset.page === "users") { loadUsers(); loadLDAP(); loadOIDC(); }
         closeSidebar();
     });
 });
@@ -749,6 +749,93 @@ window.testLDAP = async function () {
                 bind_password: document.getElementById("ldap-bind-password").value,
                 base_dn: document.getElementById("ldap-base-dn").value,
                 user_search_filter: document.getElementById("ldap-search-filter").value,
+            }),
+        });
+        const data = await resp.json();
+        if (data.success) {
+            statusEl.className = "status-msg success";
+            statusEl.textContent = data.message;
+        } else {
+            statusEl.className = "status-msg error";
+            statusEl.textContent = "Failed: " + data.error;
+        }
+    } catch (err) {
+        statusEl.className = "status-msg error";
+        statusEl.textContent = "Error: " + err.message;
+    }
+};
+
+// ─── OIDC Configuration ───
+
+async function loadOIDC() {
+    try {
+        const resp = await fetch("/api/oidc");
+        const data = await resp.json();
+        const unavailableEl = document.getElementById("oidc-unavailable");
+        if (data.available === false) {
+            if (unavailableEl) unavailableEl.style.display = "block";
+        } else if (unavailableEl) {
+            unavailableEl.style.display = "none";
+        }
+        document.getElementById("oidc-enabled").checked = data.enabled || false;
+        document.getElementById("oidc-display-name").value = data.display_name || "OIDC";
+        document.getElementById("oidc-issuer-url").value = data.issuer_url || "";
+        document.getElementById("oidc-client-id").value = data.client_id || "";
+        document.getElementById("oidc-client-secret").value = data.client_secret || "";
+        document.getElementById("oidc-scope").value = data.scope || "openid profile email";
+        document.getElementById("oidc-username-claim").value = data.username_claim || "preferred_username";
+        document.getElementById("oidc-default-role").value = data.default_role || "user";
+        document.getElementById("oidc-auto-create").checked = data.auto_create_users || false;
+        document.getElementById("oidc-auto-redirect").checked = data.auto_redirect || false;
+    } catch (err) {
+        console.error("Failed to load OIDC config", err);
+    }
+}
+
+window.saveOIDC = async function () {
+    const statusEl = document.getElementById("oidc-status");
+    try {
+        const resp = await fetch("/api/oidc", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                enabled: document.getElementById("oidc-enabled").checked,
+                display_name: document.getElementById("oidc-display-name").value,
+                issuer_url: document.getElementById("oidc-issuer-url").value,
+                client_id: document.getElementById("oidc-client-id").value,
+                client_secret: document.getElementById("oidc-client-secret").value,
+                scope: document.getElementById("oidc-scope").value,
+                username_claim: document.getElementById("oidc-username-claim").value,
+                default_role: document.getElementById("oidc-default-role").value,
+                auto_create_users: document.getElementById("oidc-auto-create").checked,
+                auto_redirect: document.getElementById("oidc-auto-redirect").checked,
+            }),
+        });
+        const data = await resp.json();
+        if (data.error) {
+            statusEl.className = "status-msg error";
+            statusEl.textContent = data.error;
+        } else {
+            statusEl.className = "status-msg success";
+            statusEl.textContent = "OIDC configuration saved!";
+        }
+    } catch (err) {
+        statusEl.className = "status-msg error";
+        statusEl.textContent = "Error: " + err.message;
+    }
+    setTimeout(() => { statusEl.textContent = ""; }, 3000);
+};
+
+window.testOIDC = async function () {
+    const statusEl = document.getElementById("oidc-status");
+    statusEl.className = "status-msg";
+    statusEl.textContent = "Testing...";
+    try {
+        const resp = await fetch("/api/oidc/test", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                issuer_url: document.getElementById("oidc-issuer-url").value,
             }),
         });
         const data = await resp.json();

@@ -141,6 +141,14 @@ Non-admin users can search for books and make requests but do not have access to
 
 LDAP Users are also supported via Users > Advanced.
 
+OIDC (OpenID Connect) sign-in is also supported via Users > Advanced. When enabled, the
+login page shows a "Sign in with [provider]" button alongside the username/password form.
+Configure with your IdP's issuer URL, client ID, and client secret. Optional toggles:
+- **Auto-create users on first login**: provision new users on successful OIDC sign-in (off by default)
+- **Auto-redirect to OIDC on login page**: skip the username/password form and go straight to the IdP. If your IdP later becomes unreachable, append `?bypass=1` to the login URL (`/login?bypass=1`) to surface the local form again without editing config on disk.
+
+The redirect URI to register at your IdP is `https://<your-libreseerr-host>/api/auth/oidc/callback`.
+
 ![Libreseerr Users Page](screenshots/users.png)
 
 ## Environment Variables

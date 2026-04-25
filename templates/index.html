@@ -199,6 +199,73 @@
                             </div>
                             <div id="ldap-status" class="status-msg"></div>
                         </div>
+                        <div class="settings-card" style="margin-top: 1rem;">
+                            <h3>OIDC Configuration</h3>
+                            <div id="oidc-unavailable" class="status-msg error" style="display: none; margin-bottom: 0.75rem;">
+                                authlib library is not installed. Add <code>authlib</code> to requirements.txt and rebuild the image to enable OIDC.
+                            </div>
+                            <div class="form-group">
+                                <label class="toggle-label">
+                                    <input type="checkbox" id="oidc-enabled">
+                                    Enable OIDC Authentication
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label for="oidc-display-name">Display Name</label>
+                                <input type="text" id="oidc-display-name" placeholder="Authentik">
+                            </div>
+                            <div class="form-group">
+                                <label for="oidc-issuer-url">Issuer URL</label>
+                                <input type="text" id="oidc-issuer-url" placeholder="https://auth.example.com/application/o/libreseerr/">
+                            </div>
+                            <div class="form-group">
+                                <label for="oidc-client-id">Client ID</label>
+                                <input type="text" id="oidc-client-id" placeholder="Client ID from your IdP">
+                            </div>
+                            <div class="form-group">
+                                <label for="oidc-client-secret">Client Secret</label>
+                                <input type="password" id="oidc-client-secret" placeholder="Client secret from your IdP">
+                            </div>
+                            <div class="form-group">
+                                <label for="oidc-scope">Scope</label>
+                                <input type="text" id="oidc-scope" placeholder="openid profile email">
+                            </div>
+                            <div class="form-group">
+                                <label for="oidc-username-claim">Username Claim</label>
+                                <select id="oidc-username-claim">
+                                    <option value="preferred_username">preferred_username</option>
+                                    <option value="sub">sub</option>
+                                    <option value="email">email</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="oidc-default-role">Default Role for New OIDC Users</label>
+                                <select id="oidc-default-role">
+                                    <option value="user">User</option>
+                                    <option value="admin">Admin</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="toggle-label">
+                                    <input type="checkbox" id="oidc-auto-create">
+                                    Auto-create users on first login
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label class="toggle-label">
+                                    <input type="checkbox" id="oidc-auto-redirect">
+                                    Auto-redirect to OIDC on login page
+                                </label>
+                                <small style="display: block; margin-top: 0.25rem; color: var(--text-muted, #9ca3af); font-size: 0.75rem;">
+                                    If your IdP becomes unreachable, append <code>?bypass=1</code> to the login URL to show the local form.
+                                </small>
+                            </div>
+                            <div class="btn-group">
+                                <button class="btn btn-secondary" onclick="testOIDC()">Test Connection</button>
+                                <button class="btn btn-primary" onclick="saveOIDC()">Save</button>
+                            </div>
+                            <div id="oidc-status" class="status-msg"></div>
+                        </div>
                     </details>
                 </div>
             </div>

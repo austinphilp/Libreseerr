@@ -10,6 +10,7 @@ from functools import wraps
 import requests as http_requests
 from flask import Flask, jsonify, render_template, request, redirect, url_for
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
+from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import generate_password_hash, check_password_hash
 
 try:
@@ -18,11 +19,23 @@ try:
 except ImportError:
     LDAP3_AVAILABLE = False
 
+try:
+    import oidc as oidc_helper
+    OIDC_AVAILABLE = True
+except ImportError:
+    OIDC_AVAILABLE = False
+
 from bookshelf import BookshelfClient
 from readarr import ReadarrClient
 from lazylibrarian import LazyLibrarianClient
 
 app = Flask(__name__)
+
+# Honor X-Forwarded-* headers from a reverse proxy (haproxy, nginx, traefik, etc.)
+# so url_for(..., _external=True) generates correct https URLs. Required for the
+# OIDC redirect_uri to match what's registered at the IdP when the app sits
+# behind a proxy. No-op when no proxy is in front (headers absent).
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
 
 def _load_or_create_secret_key():
@@ -56,7 +69,7 @@ REQUESTS_FILE = os.path.join(os.path.dirname(__file__), "data", "requests.json")
 USERS_FILE = os.path.join(os.path.dirname(__file__), "data", "users.json")
 
 # In-memory state
-config = {"ebook": {}, "audiobook": {}, "ldap": {}}
+config = {"ebook": {}, "audiobook": {}, "ldap": {}, "oidc": {}}
 requests_history = []
 users = []
 lock = threading.Lock()
@@ -201,6 +214,9 @@ load_requests()
 load_users()
 init_default_admin()
 
+if OIDC_AVAILABLE:
+    oidc_helper.init_oidc(app, config)
+
 
 @app.before_request
 def reload_state():
@@ -208,6 +224,10 @@ def reload_state():
     load_config()
     load_requests()
     load_users()
+    # Re-init the OIDC client if config changed in another worker. init_oidc
+    # is idempotent — registers/unregisters the client based on enabled flag.
+    if OIDC_AVAILABLE and not app.extensions.get("oidc_client") and config.get("oidc", {}).get("enabled"):
+        oidc_helper.init_oidc(app, config)
 
 
 # ─── LDAP Auth ───
@@ -497,6 +517,165 @@ def test_ldap():
         return jsonify({"success": True, "message": "Connected to LDAP server successfully"})
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+
+
+# ─── OIDC Config API ───
+
+@app.route("/api/oidc", methods=["GET"])
+@admin_required
+def get_oidc():
+    if not OIDC_AVAILABLE:
+        return jsonify({
+            "available": False,
+            "enabled": False, "display_name": "OIDC", "issuer_url": "",
+            "client_id": "", "client_secret": "", "scope": "openid profile email",
+            "username_claim": "preferred_username", "default_role": "user",
+            "auto_create_users": False, "auto_redirect": False,
+        })
+    defaults = oidc_helper.get_oidc_defaults()
+    oidc = config.get("oidc", defaults)
+    return jsonify({
+        "available": True,
+        "enabled": oidc.get("enabled", False),
+        "display_name": oidc.get("display_name", defaults["display_name"]),
+        "issuer_url": oidc.get("issuer_url", ""),
+        "client_id": oidc.get("client_id", ""),
+        "client_secret": oidc.get("client_secret", ""),
+        "scope": oidc.get("scope", defaults["scope"]),
+        "username_claim": oidc.get("username_claim", defaults["username_claim"]),
+        "default_role": oidc.get("default_role", "user"),
+        "auto_create_users": oidc.get("auto_create_users", False),
+        "auto_redirect": oidc.get("auto_redirect", False),
+    })
+
+
+@app.route("/api/oidc", methods=["POST"])
+@admin_required
+def update_oidc():
+    if not OIDC_AVAILABLE:
+        return jsonify({"error": "authlib library is not installed"}), 400
+    data = request.json
+    if data.get("default_role") not in ("admin", "user"):
+        return jsonify({"error": "Role must be 'admin' or 'user'"}), 400
+    config["oidc"] = {
+        "enabled": bool(data.get("enabled")),
+        "display_name": data.get("display_name", "").strip() or "OIDC",
+        "issuer_url": data.get("issuer_url", "").strip(),
+        "client_id": data.get("client_id", "").strip(),
+        "client_secret": data.get("client_secret", ""),
+        "scope": data.get("scope", "").strip() or "openid profile email",
+        "username_claim": data.get("username_claim", "").strip() or "preferred_username",
+        "default_role": data.get("default_role", "user"),
+        "auto_create_users": bool(data.get("auto_create_users")),
+        "auto_redirect": bool(data.get("auto_redirect")),
+    }
+    save_config()
+    # Re-register the OAuth client so the new config takes effect immediately.
+    oidc_helper.init_oidc(app, config)
+    return jsonify({"success": True})
+
+
+@app.route("/api/oidc/test", methods=["POST"])
+@admin_required
+def test_oidc():
+    if not OIDC_AVAILABLE:
+        return jsonify({"error": "authlib library is not installed"}), 400
+    data = request.json
+    issuer_url = data.get("issuer_url", "").strip()
+    if not issuer_url:
+        return jsonify({"error": "issuer_url is required"}), 400
+    try:
+        doc = oidc_helper.fetch_discovery(issuer_url)
+        ok, msg = oidc_helper.validate_discovery(doc)
+        if not ok:
+            return jsonify({"error": msg}), 400
+        return jsonify({
+            "success": True,
+            "message": f"Discovery OK. Issuer: {doc.get('issuer', '')}",
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+# ─── OIDC Auth Flow ───
+
+@app.route("/api/auth/oidc/login")
+def oidc_login():
+    """Initiates the OIDC redirect to the IdP."""
+    if not OIDC_AVAILABLE or not config.get("oidc", {}).get("enabled"):
+        return redirect(url_for("login"))
+    client = oidc_helper.get_client(app)
+    if client is None:
+        # Configured but client failed to init (bad issuer, etc.) — fall back.
+        return redirect(url_for("login"))
+    redirect_uri = url_for("oidc_callback", _external=True)
+    return client.authorize_redirect(redirect_uri)
+
+
+@app.route("/api/auth/oidc/callback")
+def oidc_callback():
+    """Handles the redirect back from the IdP, exchanges code for tokens,
+    finds or provisions the user, logs them in."""
+    oidc_cfg = config.get("oidc", {})
+    if not OIDC_AVAILABLE or not oidc_cfg.get("enabled"):
+        return redirect(url_for("login"))
+    client = oidc_helper.get_client(app)
+    if client is None:
+        return redirect(url_for("login") + "?error=oidc_not_initialized")
+    try:
+        token = client.authorize_access_token()
+    except Exception as e:
+        app.logger.warning("OIDC token exchange failed: %s", e)
+        return redirect(url_for("login") + "?error=oidc_token_exchange_failed")
+
+    userinfo = token.get("userinfo")
+    if not userinfo:
+        try:
+            userinfo = client.userinfo(token=token)
+        except Exception as e:
+            app.logger.warning("OIDC userinfo fetch failed: %s", e)
+            return redirect(url_for("login") + "?error=oidc_userinfo_failed")
+
+    username = oidc_helper.extract_username(userinfo, oidc_cfg.get("username_claim", "preferred_username"))
+    if not username:
+        app.logger.warning("OIDC token contains no usable username claim: %s", userinfo)
+        return redirect(url_for("login") + "?error=oidc_no_username")
+
+    existing = next((u for u in users if u["username"] == username), None)
+    if not existing:
+        if not oidc_cfg.get("auto_create_users"):
+            app.logger.info("OIDC login rejected for '%s' — user does not exist and auto_create_users is off", username)
+            return redirect(url_for("login") + "?error=account_not_found")
+        existing = {
+            "username": username,
+            "password_hash": "oidc",
+            "role": oidc_cfg.get("default_role", "user"),
+            "auth_source": "oidc",
+            "created_at": datetime.utcnow().isoformat(),
+        }
+        users.append(existing)
+        save_users()
+        app.logger.info("Auto-provisioned OIDC user '%s'", username)
+
+    login_user(User(existing))
+    return redirect(url_for("index"))
+
+
+# ─── Auth provider discovery (for login page UI) ───
+
+@app.route("/api/auth/providers", methods=["GET"])
+def auth_providers():
+    """Tells the login page which alt providers (beyond local username/password)
+    are enabled, so it can render the appropriate buttons. Public — no auth
+    required, since the login page is itself public."""
+    oidc_cfg = config.get("oidc") or {}
+    return jsonify({
+        "oidc": {
+            "enabled": bool(OIDC_AVAILABLE and oidc_cfg.get("enabled")),
+            "display_name": oidc_cfg.get("display_name") or "OIDC",
+            "auto_redirect": bool(oidc_cfg.get("auto_redirect")),
+        },
+    })
 
 
 # ─── Config API ───
