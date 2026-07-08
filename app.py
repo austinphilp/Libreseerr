@@ -25,6 +25,7 @@ try:
 except ImportError:
     OIDC_AVAILABLE = False
 
+from audiobookshelf import AudiobookshelfClient
 from bookshelf import BookshelfClient
 from readarr import ReadarrClient
 from lazylibrarian import LazyLibrarianClient
@@ -69,7 +70,7 @@ REQUESTS_FILE = os.path.join(os.path.dirname(__file__), "data", "requests.json")
 USERS_FILE = os.path.join(os.path.dirname(__file__), "data", "users.json")
 
 # In-memory state
-config = {"ebook": {}, "audiobook": {}, "ldap": {}, "oidc": {}}
+config = {"ebook": {}, "audiobook": {}, "ldap": {}, "oidc": {}, "audiobookshelf": {}}
 requests_history = []
 users = []
 lock = threading.Lock()
@@ -524,6 +525,48 @@ def test_ldap():
         return jsonify({"error": str(e)}), 400
 
 
+# ─── Audiobookshelf Config API ───
+
+@app.route("/api/audiobookshelf", methods=["GET"])
+@admin_required
+def get_audiobookshelf():
+    load_config()
+    abs_config = config.get("audiobookshelf", {})
+    return jsonify({
+        "url": abs_config.get("url", ""),
+        "api_token": abs_config.get("api_token", ""),
+        "configured": bool(abs_config.get("url") and abs_config.get("api_token")),
+    })
+
+
+@app.route("/api/audiobookshelf", methods=["POST"])
+@admin_required
+def update_audiobookshelf():
+    data = request.json
+    config["audiobookshelf"] = {
+        "url": data.get("url", "").strip().rstrip("/"),
+        "api_token": data.get("api_token", "").strip(),
+    }
+    save_config()
+    return jsonify({"success": True})
+
+
+@app.route("/api/audiobookshelf/test", methods=["POST"])
+@admin_required
+def test_audiobookshelf():
+    data = request.json
+    url = data.get("url", "").strip().rstrip("/")
+    api_token = data.get("api_token", "").strip()
+    if not url or not api_token:
+        return jsonify({"error": "url and api_token are required"}), 400
+    try:
+        client = AudiobookshelfClient(url, api_token)
+        status = client.test_connection()
+        return jsonify({"success": True, "status": status})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
 # ─── OIDC Config API ───
 
 @app.route("/api/oidc", methods=["GET"])
@@ -702,6 +745,14 @@ def get_config():
             "server_software": config["audiobook"].get("server_software", "readarr"),
             "configured": bool(config["audiobook"].get("url") and config["audiobook"].get("api_key")),
         },
+        "audiobookshelf": {
+            "url": config.get("audiobookshelf", {}).get("url", ""),
+            "api_token": config.get("audiobookshelf", {}).get("api_token", ""),
+            "configured": bool(
+                config.get("audiobookshelf", {}).get("url")
+                and config.get("audiobookshelf", {}).get("api_token")
+            ),
+        },
     })
 
 
@@ -735,6 +786,14 @@ def get_library():
             titles |= client.get_downloaded_titles()
         except Exception as e:
             app.logger.warning("Failed to fetch library for %s: %s", server_type, e)
+    # Also check Audiobookshelf (read-only library source)
+    abs_config = config.get("audiobookshelf", {})
+    if abs_config.get("url") and abs_config.get("api_token"):
+        try:
+            abs_client = AudiobookshelfClient(abs_config["url"], abs_config["api_token"])
+            titles |= abs_client.get_downloaded_titles()
+        except Exception as e:
+            app.logger.warning("Failed to fetch library for audiobookshelf: %s", e)
     return jsonify(list(titles))
 
 

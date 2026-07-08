@@ -151,6 +151,25 @@
                             <button class="btn btn-primary" style="margin-top:0.5rem" onclick="saveDefaultProfile()">Save Default</button>
                         </div>
                     </div>
+                    <div class="settings-card">
+                        <h3>Audiobookshelf</h3>
+                        <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+                            Read-only library check. Books in Audiobookshelf will show as "Downloaded".
+                        </p>
+                        <div class="form-group">
+                            <label for="abs-url">URL</label>
+                            <input type="text" id="abs-url" placeholder="https://abs.example.com">
+                        </div>
+                        <div class="form-group">
+                            <label for="abs-token">API Token</label>
+                            <input type="password" id="abs-token" placeholder="Audiobookshelf API Token">
+                        </div>
+                        <div class="btn-group">
+                            <button class="btn btn-secondary" onclick="testAudiobookshelf()">Test</button>
+                            <button class="btn btn-primary" onclick="saveAudiobookshelf()">Save</button>
+                        </div>
+                        <div id="abs-status" class="status-msg"></div>
+                    </div>
                 </div>
             </div>
 

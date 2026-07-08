@@ -89,7 +89,7 @@ document.querySelectorAll(".sidebar-link").forEach((link) => {
         const pageId = "page-" + link.dataset.page;
         document.getElementById(pageId).classList.add("active");
         if (link.dataset.page === "requests") loadRequests();
-        if (link.dataset.page === "settings") loadConfig();
+        if (link.dataset.page === "settings") { loadConfig(); loadAudiobookshelf(); }
         if (link.dataset.page === "users") { loadUsers(); loadLDAP(); loadOIDC(); }
         closeSidebar();
     });
@@ -574,6 +574,73 @@ window.testConnection = async function (type) {
         if (data.success) {
             statusEl.className = "status-msg success";
             statusEl.textContent = "Connected! Version: " + (data.status.version || "unknown");
+        } else {
+            statusEl.className = "status-msg error";
+            statusEl.textContent = "Failed: " + data.error;
+        }
+    } catch (err) {
+        statusEl.className = "status-msg error";
+        statusEl.textContent = "Error: " + err.message;
+    }
+};
+
+// ─── Audiobookshelf Configuration ───
+
+async function loadAudiobookshelf() {
+    try {
+        const resp = await fetch("/api/audiobookshelf");
+        const data = await resp.json();
+        document.getElementById("abs-url").value = data.url || "";
+        document.getElementById("abs-token").value = data.api_token || "";
+    } catch (err) {
+        console.error("Failed to load Audiobookshelf config", err);
+    }
+}
+
+window.saveAudiobookshelf = async function () {
+    const statusEl = document.getElementById("abs-status");
+    try {
+        const resp = await fetch("/api/audiobookshelf", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                url: document.getElementById("abs-url").value,
+                api_token: document.getElementById("abs-token").value,
+            }),
+        });
+        const data = await resp.json();
+        if (data.error) {
+            statusEl.className = "status-msg error";
+            statusEl.textContent = data.error;
+        } else {
+            statusEl.className = "status-msg success";
+            statusEl.textContent = "Audiobookshelf configuration saved!";
+        }
+    } catch (err) {
+        statusEl.className = "status-msg error";
+        statusEl.textContent = "Error: " + err.message;
+    }
+    setTimeout(() => { statusEl.textContent = ""; }, 3000);
+};
+
+window.testAudiobookshelf = async function () {
+    const statusEl = document.getElementById("abs-status");
+    statusEl.className = "status-msg";
+    statusEl.textContent = "Testing...";
+    try {
+        const resp = await fetch("/api/audiobookshelf/test", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                url: document.getElementById("abs-url").value,
+                api_token: document.getElementById("abs-token").value,
+            }),
+        });
+        const data = await resp.json();
+        if (data.success) {
+            statusEl.className = "status-msg success";
+            const username = data.status?.user?.username || "unknown";
+            statusEl.textContent = "Connected! User: " + username;
         } else {
             statusEl.className = "status-msg error";
             statusEl.textContent = "Failed: " + data.error;
