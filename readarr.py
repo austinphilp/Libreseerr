@@ -210,6 +210,7 @@ class ReadarrClient:
             )
             if match:
                 logger.info("Book already exists: '%s' (id=%s)", match.get("title"), match.get("id"))
+                self._trigger_book_search(match.get("id"))
                 return match
 
         # Build the edition payload.  Readarr's EditionResourceMapper.ToModel
@@ -260,6 +261,7 @@ class ReadarrClient:
             )
             if match:
                 logger.info("Book already exists (after POST error): '%s' (id=%s)", match.get("title"), match.get("id"))
+                self._trigger_book_search(match.get("id"))
                 return match
 
             logger.error("POST /book failed (%d): %s", resp.status_code, resp.text[:500])
@@ -268,22 +270,26 @@ class ReadarrClient:
         result = resp.json()
         book_id = result.get("id")
 
-        # Trigger a search for just this book via the command API
-        if book_id:
-            search_resp = self.session.post(
-                self._url("/command"),
-                json={"name": "BookSearch", "bookIds": [book_id]},
-                timeout=15,
-            )
-            if search_resp.ok:
-                logger.info("Triggered BookSearch for book id=%d", book_id)
-            else:
-                logger.warning(
-                    "BookSearch command failed (%d): %s",
-                    search_resp.status_code, search_resp.text[:200],
-                )
+        self._trigger_book_search(book_id)
 
         return result
+
+    def _trigger_book_search(self, book_id: int) -> None:
+        """Trigger a search for just this book via the command API."""
+        if not book_id:
+            return
+        search_resp = self.session.post(
+            self._url("/command"),
+            json={"name": "BookSearch", "bookIds": [book_id]},
+            timeout=15,
+        )
+        if search_resp.ok:
+            logger.info("Triggered BookSearch for book id=%d", book_id)
+        else:
+            logger.warning(
+                "BookSearch command failed (%d): %s",
+                search_resp.status_code, search_resp.text[:200],
+            )
 
     def get_queue(self) -> list:
         """Get current download queue."""
