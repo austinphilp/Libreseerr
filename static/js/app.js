@@ -6,6 +6,21 @@ let editingUsername = null;
 let serverConfig = { ebook: { configured: false }, audiobook: { configured: false } };
 let requestsByTitle = {}; // lowercase title → request status (libreseerr history)
 let downloadedTitles = new Set(); // lowercase titles confirmed downloaded in Readarr/Bookshelf
+let cachedAvailability = null;
+
+const DISCOVERY_CATEGORIES = [
+    { key: "new_releases", title: "New Releases" },
+    { key: "trending", title: "Trending" },
+    { key: "best_sellers", title: "Best Sellers" },
+    { key: "fiction", title: "Popular Fiction" },
+    { key: "science_fiction", title: "Science Fiction" },
+    { key: "mystery", title: "Mystery & Thriller" },
+    { key: "fantasy", title: "Fantasy" },
+    { key: "romance", title: "Romance" },
+    { key: "nonfiction", title: "Non-Fiction" },
+    { key: "history", title: "History" },
+    { key: "classics", title: "Classics" },
+];
 
 // ─── Auth ───
 
@@ -75,7 +90,7 @@ document.querySelectorAll(".sidebar-link").forEach((link) => {
         document.getElementById(pageId).classList.add("active");
         if (link.dataset.page === "requests") loadRequests();
         if (link.dataset.page === "settings") loadConfig();
-        if (link.dataset.page === "users") { loadUsers(); loadLDAP(); }
+        if (link.dataset.page === "users") { loadUsers(); loadLDAP(); loadOIDC(); }
         closeSidebar();
     });
 });
@@ -94,6 +109,7 @@ searchInput.addEventListener("input", () => {
 
 async function doSearch() {
     const query = searchInput.value.trim();
+    const container = document.getElementById("discovery-content");
     const grid = document.getElementById("search-results");
 
     // Make sure we're on the search page
@@ -102,9 +118,13 @@ async function doSearch() {
     }
 
     if (!query) {
-        grid.innerHTML = '<div class="empty-state">Search for books by title, author, or ISBN</div>';
+        loadDiscovery();
         return;
     }
+
+    // Switch to search mode
+    container.style.display = "none";
+    grid.style.display = "";
 
     grid.innerHTML = '<div class="empty-state"><div class="spinner"></div> Searching...</div>';
 
@@ -125,6 +145,7 @@ async function doSearch() {
             if (downloadedTitles.has(book.title?.toLowerCase())) return; // already in library
             card.addEventListener("click", () => openDownloadModal(book));
         });
+        fetchAvailability().then(applyAvailabilityBadges);
     } catch (err) {
         grid.innerHTML = `<div class="empty-state">Error: ${err.message}</div>`;
     }
@@ -166,6 +187,103 @@ function renderBookCard(book) {
                 ${year ? `<div class="book-year">${year}</div>` : ""}
             </div>
         </div>`;
+}
+
+async function fetchAvailability() {
+    if (cachedAvailability) return cachedAvailability;
+    try {
+        const resp = await fetch("/api/availability");
+        cachedAvailability = await resp.json();
+    } catch {
+        cachedAvailability = { ebook: { isbns: [], titles: [] }, audiobook: { isbns: [], titles: [] } };
+    }
+    return cachedAvailability;
+}
+
+function applyAvailabilityBadges(availability) {
+    document.querySelectorAll(".book-card").forEach((card) => {
+        if (card.querySelector(".book-badges")) return;
+        let book;
+        try { book = JSON.parse(card.dataset.book); } catch { return; }
+        const isbn = book.isbn_13 || book.isbn_10 || book.isbn13 || book.isbn10 || "";
+        const title = (book.title || "").toLowerCase();
+
+        const hasEbook = (isbn && availability.ebook.isbns.includes(isbn)) ||
+            (title && availability.ebook.titles.includes(title));
+        const hasAudiobook = (isbn && availability.audiobook.isbns.includes(isbn)) ||
+            (title && availability.audiobook.titles.includes(title));
+        const ebookRequested = availability.ebook_requests &&
+            ((isbn && availability.ebook_requests.isbns.includes(isbn)) ||
+            (title && availability.ebook_requests.titles.includes(title)));
+        const audiobookRequested = availability.audiobook_requests &&
+            ((isbn && availability.audiobook_requests.isbns.includes(isbn)) ||
+            (title && availability.audiobook_requests.titles.includes(title)));
+
+        // "Requested" takes priority over "available" for the same server type
+        const showEbook = ebookRequested ? "requested" : (hasEbook ? "available" : null);
+        const showAudiobook = audiobookRequested ? "requested" : (hasAudiobook ? "available" : null);
+
+        if (!showEbook && !showAudiobook) return;
+
+        let html = '<div class="book-badges">';
+        if (showEbook === "available") html += '<span class="book-badge ebook">eBook ✓</span>';
+        else if (showEbook === "requested") html += '<span class="book-badge ebook-requested">eBook Requested</span>';
+        if (showAudiobook === "available") html += '<span class="book-badge audiobook">Audiobook ✓</span>';
+        else if (showAudiobook === "requested") html += '<span class="book-badge audiobook-requested">Audiobook Requested</span>';
+        html += '</div>';
+        card.querySelector(".book-info").insertAdjacentHTML("beforeend", html);
+    });
+}
+
+function renderDiscoveryRow(category) {
+    const cards = category.books.map(renderBookCard).join("");
+    return `
+        <div class="discovery-row">
+            <div class="discovery-row-header">
+                <div class="discovery-row-title">${category.title}</div>
+            </div>
+            <div class="discovery-row-scroll">${cards}</div>
+        </div>`;
+}
+
+async function loadDiscovery() {
+    const container = document.getElementById("discovery-content");
+    const searchResults = document.getElementById("search-results");
+
+    container.style.display = "";
+    searchResults.style.display = "none";
+
+    container.innerHTML = '<div class="discovery-loading"><div class="spinner"></div> Loading discovery...</div>';
+
+    const promises = DISCOVERY_CATEGORIES.map(async (cat) => {
+        try {
+            const resp = await fetch("/api/discover?category=" + encodeURIComponent(cat.key) + "&limit=20");
+            const data = await resp.json();
+            if (data.error || !data.length) return null;
+            return { ...cat, books: data };
+        } catch {
+            return null;
+        }
+    });
+
+    const results = await Promise.all(promises);
+    const valid = results.filter(Boolean);
+
+    if (!valid.length) {
+        container.innerHTML = '<div class="empty-state">Unable to load discovery content</div>';
+        return;
+    }
+
+    container.innerHTML = valid.map(renderDiscoveryRow).join("");
+
+    container.querySelectorAll(".book-card").forEach((card) => {
+        const book = JSON.parse(card.dataset.book);
+        if (downloadedTitles.has(book.title?.toLowerCase())) return; // already in library
+        card.addEventListener("click", () => {
+            openDownloadModal(book);
+        });
+    });
+    fetchAvailability().then(applyAvailabilityBadges);
 }
 
 // ─── Download Modal ───
@@ -708,6 +826,93 @@ window.testLDAP = async function () {
     }
 };
 
+// ─── OIDC Configuration ───
+
+async function loadOIDC() {
+    try {
+        const resp = await fetch("/api/oidc");
+        const data = await resp.json();
+        const unavailableEl = document.getElementById("oidc-unavailable");
+        if (data.available === false) {
+            if (unavailableEl) unavailableEl.style.display = "block";
+        } else if (unavailableEl) {
+            unavailableEl.style.display = "none";
+        }
+        document.getElementById("oidc-enabled").checked = data.enabled || false;
+        document.getElementById("oidc-display-name").value = data.display_name || "OIDC";
+        document.getElementById("oidc-issuer-url").value = data.issuer_url || "";
+        document.getElementById("oidc-client-id").value = data.client_id || "";
+        document.getElementById("oidc-client-secret").value = data.client_secret || "";
+        document.getElementById("oidc-scope").value = data.scope || "openid profile email";
+        document.getElementById("oidc-username-claim").value = data.username_claim || "preferred_username";
+        document.getElementById("oidc-default-role").value = data.default_role || "user";
+        document.getElementById("oidc-auto-create").checked = data.auto_create_users || false;
+        document.getElementById("oidc-auto-redirect").checked = data.auto_redirect || false;
+    } catch (err) {
+        console.error("Failed to load OIDC config", err);
+    }
+}
+
+window.saveOIDC = async function () {
+    const statusEl = document.getElementById("oidc-status");
+    try {
+        const resp = await fetch("/api/oidc", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                enabled: document.getElementById("oidc-enabled").checked,
+                display_name: document.getElementById("oidc-display-name").value,
+                issuer_url: document.getElementById("oidc-issuer-url").value,
+                client_id: document.getElementById("oidc-client-id").value,
+                client_secret: document.getElementById("oidc-client-secret").value,
+                scope: document.getElementById("oidc-scope").value,
+                username_claim: document.getElementById("oidc-username-claim").value,
+                default_role: document.getElementById("oidc-default-role").value,
+                auto_create_users: document.getElementById("oidc-auto-create").checked,
+                auto_redirect: document.getElementById("oidc-auto-redirect").checked,
+            }),
+        });
+        const data = await resp.json();
+        if (data.error) {
+            statusEl.className = "status-msg error";
+            statusEl.textContent = data.error;
+        } else {
+            statusEl.className = "status-msg success";
+            statusEl.textContent = "OIDC configuration saved!";
+        }
+    } catch (err) {
+        statusEl.className = "status-msg error";
+        statusEl.textContent = "Error: " + err.message;
+    }
+    setTimeout(() => { statusEl.textContent = ""; }, 3000);
+};
+
+window.testOIDC = async function () {
+    const statusEl = document.getElementById("oidc-status");
+    statusEl.className = "status-msg";
+    statusEl.textContent = "Testing...";
+    try {
+        const resp = await fetch("/api/oidc/test", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                issuer_url: document.getElementById("oidc-issuer-url").value,
+            }),
+        });
+        const data = await resp.json();
+        if (data.success) {
+            statusEl.className = "status-msg success";
+            statusEl.textContent = data.message;
+        } else {
+            statusEl.className = "status-msg error";
+            statusEl.textContent = "Failed: " + data.error;
+        }
+    } catch (err) {
+        statusEl.className = "status-msg error";
+        statusEl.textContent = "Error: " + err.message;
+    }
+};
+
 // ─── Init ───
 
 async function loadLibrary() {
@@ -721,10 +926,8 @@ async function loadLibrary() {
 }
 
 // Load current user first, then the rest
-loadCurrentUser().then(() => {
+loadCurrentUser().then(async () => {
     loadConfig();
-    loadRequests();
-    loadLibrary();
-    document.getElementById("search-results").innerHTML =
-        '<div class="empty-state">Search for books by title, author, or ISBN</div>';
+    await Promise.all([loadRequests(), loadLibrary()]);
+    loadDiscovery();
 });

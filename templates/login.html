@@ -144,6 +144,49 @@
             color: var(--text-muted);
             font-size: 0.7rem;
         }
+
+        .login-divider {
+            align-items: center;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin: 1.25rem 0 1rem;
+            display: none;
+        }
+
+        .login-divider::before,
+        .login-divider::after {
+            content: "";
+            flex: 1;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .login-divider span { padding: 0 0.625rem; }
+
+        .login-btn-secondary {
+            display: none;
+            width: 100%;
+            padding: 0.625rem;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            border-radius: 0.5rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+            text-decoration: none;
+            text-align: center;
+            transition: all 0.2s;
+            box-sizing: border-box;
+        }
+
+        .login-btn-secondary:hover {
+            background: var(--bg-hover);
+            border-color: var(--pink-primary);
+        }
     </style>
 </head>
 <body>
@@ -166,10 +209,51 @@
                 </div>
                 <button type="submit" class="login-btn" id="login-btn">Sign In</button>
             </form>
+            <div class="login-divider" id="login-divider"><span>or</span></div>
+            <a href="/api/auth/oidc/login" class="login-btn-secondary" id="oidc-login-btn">Sign in with OIDC</a>
         </div>
         <div class="login-footer">Libreseerr &mdash; Book Request Management</div>
     </div>
     <script>
+        // Surface OIDC error codes from the callback redirect.
+        const params = new URLSearchParams(window.location.search);
+        const oidcError = params.get("error");
+        // Anti-lockout: ?bypass=1 keeps the local form visible even when
+        // auto-redirect is enabled. Lets admins recover without editing
+        // config on disk if their IdP becomes unreachable.
+        const oidcBypass = params.has("bypass");
+        if (oidcError) {
+            const map = {
+                account_not_found: "No matching account. Ask an admin to create one or enable auto-create.",
+                oidc_token_exchange_failed: "OIDC token exchange failed. Check provider config.",
+                oidc_userinfo_failed: "OIDC userinfo fetch failed. Check provider config.",
+                oidc_no_username: "OIDC token had no usable username claim.",
+                oidc_not_initialized: "OIDC is enabled but the client failed to initialize. Check the issuer URL.",
+            };
+            const errorEl = document.getElementById("login-error");
+            errorEl.textContent = map[oidcError] || "OIDC sign-in failed.";
+            errorEl.style.display = "block";
+        }
+
+        // Discover available alt providers and reveal the OIDC button if enabled.
+        // If auto_redirect is set, fire the redirect immediately rather than
+        // showing the form. An error in the URL suppresses auto-redirect so
+        // the user can read what went wrong.
+        fetch("/api/auth/providers")
+            .then(r => r.json())
+            .then(p => {
+                const oidc = p.oidc || {};
+                if (!oidc.enabled) return;
+                const btn = document.getElementById("oidc-login-btn");
+                btn.textContent = "Sign in with " + (oidc.display_name || "OIDC");
+                btn.style.display = "block";
+                document.getElementById("login-divider").style.display = "flex";
+                if (oidc.auto_redirect && !oidcError && !oidcBypass) {
+                    window.location.href = "/api/auth/oidc/login";
+                }
+            })
+            .catch(() => { /* network hiccup — fall back to form-only */ });
+
         document.getElementById("login-form").addEventListener("submit", async (e) => {
             e.preventDefault();
             const btn = document.getElementById("login-btn");
