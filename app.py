@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 import sys
 import threading
 import time
@@ -925,6 +926,52 @@ def discover_books():
         return jsonify({"error": str(e)}), 500
 
 
+def _search_key(value):
+    """Normalize text for lightweight local result ranking."""
+    return re.sub(r"[^a-z0-9]+", " ", (value or "").lower()).strip()
+
+
+def _rank_search_result(book, query):
+    """Rank Open Library results so title/prefix/English matches beat broad text hits."""
+    title = _search_key(book.get("title", ""))
+    normalized_query = _search_key(query)
+    language = (book.get("language") or "").lower()
+    authors = " ".join(book.get("authors") or [])
+    haystack = _search_key(f"{book.get('title', '')} {authors}")
+
+    score = 0
+    if title == normalized_query:
+        score += 1000
+    if title.startswith(normalized_query):
+        score += 700
+    if normalized_query and all(part in haystack for part in normalized_query.split()):
+        score += 250
+    if language in ("eng", "en"):
+        score += 100
+    elif language:
+        score -= 25
+    if book.get("cover"):
+        score += 10
+    if book.get("publishedDate"):
+        score += 5
+    return score
+
+
+def _dedupe_search_results(results):
+    seen = set()
+    deduped = []
+    for result in results:
+        key = result.get("id") or (
+            _search_key(result.get("title", "")),
+            tuple(_search_key(author) for author in result.get("authors", [])),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(result)
+    return deduped
+
+
 @app.route("/api/search")
 @login_required
 def search_books():
@@ -932,15 +979,35 @@ def search_books():
     if not query:
         return jsonify([])
     try:
-        resp = http_requests.get(
-            "https://openlibrary.org/search.json",
-            params={"q": query, "limit": 20},
-            timeout=10,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        results = [_normalize_ol_doc(doc) for doc in data.get("docs", [])]
-        return jsonify(results)
+        params_to_try = [
+            # Open Library's broad q= search is poor as autocomplete. A title
+            # prefix query makes partial inputs like "Dire boun" find "Dire Bound".
+            {"title": f"{query}*", "language": "eng", "limit": 20},
+            {"title": query, "language": "eng", "limit": 20},
+            {"q": f"{query}*", "language": "eng", "limit": 20},
+            {"q": query, "language": "eng", "limit": 20},
+        ]
+
+        results = []
+        for params in params_to_try:
+            resp = http_requests.get(
+                "https://openlibrary.org/search.json",
+                params=params,
+                timeout=10,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            docs = data.get("docs", [])
+            if docs:
+                results.extend(_normalize_ol_doc(doc) for doc in docs)
+                # Prefer precise title/prefix matches. Only fall back to broader
+                # searches when the title-oriented attempts return nothing.
+                if "title" in params:
+                    break
+
+        results = _dedupe_search_results(results)
+        results.sort(key=lambda book: _rank_search_result(book, query), reverse=True)
+        return jsonify(results[:20])
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
