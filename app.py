@@ -961,7 +961,7 @@ def _dedupe_search_results(results):
     seen = set()
     deduped = []
     for result in results:
-        key = result.get("id") or (
+        key = result.get("foreignBookId") or result.get("id") or (
             _search_key(result.get("title", "")),
             tuple(_search_key(author) for author in result.get("authors", [])),
         )
@@ -970,6 +970,51 @@ def _dedupe_search_results(results):
         seen.add(key)
         deduped.append(result)
     return deduped
+
+
+def _normalize_server_book(book):
+    """Normalize a Readarr/Bookshelf lookup result to the UI book schema."""
+    author = book.get("author") or {}
+    author_name = author.get("authorName") or book.get("authorName") or ""
+    images = book.get("images") or []
+    cover = ""
+    if images:
+        cover = images[0].get("url", "")
+    release_date = book.get("releaseDate") or ""
+
+    return {
+        "id": book.get("foreignBookId") or book.get("id"),
+        "title": book.get("title", "Unknown"),
+        "authors": [author_name] if author_name else [],
+        "publishedDate": release_date[:10] if release_date else "",
+        "description": book.get("overview", ""),
+        "pageCount": book.get("pageCount", 0),
+        "categories": book.get("genres", [])[:5] if book.get("genres") else [],
+        "isbn_13": "",
+        "isbn_10": "",
+        "cover": cover,
+        "language": "eng",
+        "foreignBookId": book.get("foreignBookId", ""),
+        "foreignEditionId": book.get("foreignEditionId", ""),
+        "author": author,
+    }
+
+
+def _search_configured_servers(query):
+    """Search configured Readarr/Bookshelf servers for metadata not in Open Library."""
+    results = []
+    for server_type in ("audiobook", "ebook"):
+        client = get_client(server_type)
+        if not client:
+            continue
+        try:
+            for book in client.search_books(query)[:20]:
+                normalized = _normalize_server_book(book)
+                normalized["serverType"] = server_type
+                results.append(normalized)
+        except Exception as e:
+            app.logger.warning("%s server search failed for '%s': %s", server_type, query, e)
+    return results
 
 
 @app.route("/api/search")
@@ -988,7 +1033,10 @@ def search_books():
             {"q": query, "language": "eng", "limit": 20},
         ]
 
-        results = []
+        # Prefer the configured server catalog first. It often has Hardcover /
+        # Goodreads metadata for newer/indie books that Open Library lacks.
+        results = _search_configured_servers(query)
+
         for params in params_to_try:
             resp = http_requests.get(
                 "https://openlibrary.org/search.json",
