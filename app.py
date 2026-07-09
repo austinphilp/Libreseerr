@@ -1058,16 +1058,33 @@ def _normalize_server_book(book):
 def _search_configured_servers(query):
     """Search configured Readarr/Bookshelf servers for metadata not in Open Library."""
     results = []
+    query_terms = _search_terms(query)
     for server_type in ("audiobook", "ebook"):
         client = get_client(server_type)
         if not client:
             continue
         for variant in _query_variants(query):
             try:
+                variant_results = []
                 for book in client.search_books(variant)[:20]:
                     normalized = _normalize_server_book(book)
                     normalized["serverType"] = server_type
-                    results.append(normalized)
+                    variant_results.append(normalized)
+                results.extend(variant_results)
+                # Avoid slower/noisier plural retries for author-name searches or
+                # other queries where the original term already found a good hit.
+                if variant == _search_key(query) and query_terms:
+                    for normalized in variant_results:
+                        haystack_terms = set(
+                            _search_terms(
+                                f"{normalized.get('title', '')} {' '.join(normalized.get('authors') or [])}"
+                            )
+                        )
+                        if all(term in haystack_terms for term in query_terms):
+                            break
+                    else:
+                        continue
+                    break
             except Exception as e:
                 app.logger.warning("%s server search failed for '%s': %s", server_type, variant, e)
     return results
