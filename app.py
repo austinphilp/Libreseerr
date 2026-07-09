@@ -972,10 +972,30 @@ def _dedupe_search_results(results):
     return deduped
 
 
+def _author_from_author_title(book):
+    """Infer an author name from Readarr/Bookshelf authorTitle when author is omitted."""
+    author_title = book.get("authorTitle") or ""
+    title = book.get("title") or ""
+    if not author_title or not title:
+        return ""
+    normalized_author_title = _search_key(author_title)
+    normalized_title = _search_key(title)
+    if normalized_title and normalized_author_title.endswith(normalized_title):
+        raw_author = author_title[: -len(title)].strip()
+    else:
+        raw_author = author_title.strip()
+    raw_author = raw_author.strip(" ,-–—")
+    if "," in raw_author:
+        last, first = [part.strip() for part in raw_author.split(",", 1)]
+        if first and last:
+            return f"{first} {last}"
+    return raw_author
+
+
 def _normalize_server_book(book):
     """Normalize a Readarr/Bookshelf lookup result to the UI book schema."""
     author = book.get("author") or {}
-    author_name = author.get("authorName") or book.get("authorName") or ""
+    author_name = author.get("authorName") or book.get("authorName") or _author_from_author_title(book)
     images = book.get("images") or []
     cover = ""
     if images:
@@ -1183,7 +1203,13 @@ def create_request():
 
     title = book_data.get("title", "Unknown")
     authors = book_data.get("authors", [])
-    author_name = authors[0] if authors else "Unknown"
+    author_name = (
+        authors[0]
+        if authors
+        else (book_data.get("author") or {}).get("authorName")
+        or _author_from_author_title(book_data)
+        or "Unknown"
+    )
     cover_url = book_data.get("cover", "")
     isbn = book_data.get("isbn_13") or book_data.get("isbn_10", "")
 
@@ -1226,7 +1252,11 @@ def create_request():
         readarr_book = readarr_books[0]
         if not readarr_book.get("author", {}).get("authorName"):
             readarr_book["author"] = {
-                "authorName": author_name,
+                "authorName": (
+                    author_name
+                    if author_name != "Unknown"
+                    else _author_from_author_title(readarr_book) or "Unknown"
+                ),
                 "foreignAuthorId": "",
             }
         app.logger.info(

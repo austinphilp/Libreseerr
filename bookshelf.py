@@ -188,10 +188,32 @@ class BookshelfClient:
 
         resp.raise_for_status()
 
+    def _author_from_author_title(self, book_data: dict) -> str:
+        """Infer author from Bookshelf/Readarr lookup authorTitle when author is absent."""
+        author_title = book_data.get("authorTitle") or ""
+        title = book_data.get("title") or ""
+        if not author_title or not title:
+            return ""
+        raw_author = author_title
+        if author_title.lower().endswith(title.lower()):
+            raw_author = author_title[: -len(title)]
+        raw_author = raw_author.strip(" ,-–—")
+        if "," in raw_author:
+            last, first = [part.strip() for part in raw_author.split(",", 1)]
+            if first and last:
+                return f"{first} {last}"
+        return raw_author
+
     def add_book(self, book_data: dict, quality_profile_id: int, root_folder: str) -> dict:
         """Add a book to Bookshelf for downloading."""
+        author_data = book_data.get("author") or {}
+        if not author_data.get("authorName"):
+            author_data = {
+                "authorName": self._author_from_author_title(book_data) or "Unknown",
+                "foreignAuthorId": author_data.get("foreignAuthorId", ""),
+            }
         added_author = self._ensure_author(
-            book_data.get("author", {}),
+            author_data,
             quality_profile_id,
             root_folder,
         )
