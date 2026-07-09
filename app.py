@@ -1032,9 +1032,10 @@ def _normalize_server_book(book):
     author = book.get("author") or {}
     author_name = author.get("authorName") or book.get("authorName") or _author_from_author_title(book)
     images = book.get("images") or []
-    cover = ""
-    if images:
-        cover = images[0].get("url", "")
+    cover = book.get("remoteCover") or ""
+    if not cover and images:
+        first_image = images[0]
+        cover = first_image.get("remoteUrl") or first_image.get("url", "")
     release_date = book.get("releaseDate") or ""
 
     return {
