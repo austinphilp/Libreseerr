@@ -931,6 +931,39 @@ def _search_key(value):
     return re.sub(r"[^a-z0-9]+", " ", (value or "").lower()).strip()
 
 
+def _search_terms(value):
+    """Normalize text into rough singular tokens for tolerant matching."""
+    terms = []
+    for part in _search_key(value).split():
+        if len(part) > 3 and part.endswith("s"):
+            part = part[:-1]
+        terms.append(part)
+    return terms
+
+
+def _query_variants(query):
+    """Generate simple plural variants for metadata engines with brittle search."""
+    words = _search_key(query).split()
+    variants = []
+    stopwords = {"and", "or", "the", "a", "an", "of", "in", "to"}
+
+    def add(parts):
+        value = " ".join(parts).strip()
+        if value and value not in variants:
+            variants.append(value)
+
+    add(words)
+    pluralized = [w if w in stopwords or w.endswith("s") else f"{w}s" for w in words]
+    add(pluralized)
+    for idx, word in enumerate(words):
+        if word in stopwords or word.endswith("s"):
+            continue
+        parts = words[:]
+        parts[idx] = f"{word}s"
+        add(parts)
+    return variants
+
+
 def _rank_search_result(book, query):
     """Rank Open Library results so title/prefix/English matches beat broad text hits."""
     title = _search_key(book.get("title", ""))
@@ -938,13 +971,15 @@ def _rank_search_result(book, query):
     language = (book.get("language") or "").lower()
     authors = " ".join(book.get("authors") or [])
     haystack = _search_key(f"{book.get('title', '')} {authors}")
+    query_terms = _search_terms(query)
+    haystack_terms = set(_search_terms(haystack))
 
     score = 0
     if title == normalized_query:
         score += 1000
     if title.startswith(normalized_query):
         score += 700
-    if normalized_query and all(part in haystack for part in normalized_query.split()):
+    if query_terms and all(part in haystack_terms for part in query_terms):
         score += 250
     if language in ("eng", "en"):
         score += 100
@@ -1027,13 +1062,14 @@ def _search_configured_servers(query):
         client = get_client(server_type)
         if not client:
             continue
-        try:
-            for book in client.search_books(query)[:20]:
-                normalized = _normalize_server_book(book)
-                normalized["serverType"] = server_type
-                results.append(normalized)
-        except Exception as e:
-            app.logger.warning("%s server search failed for '%s': %s", server_type, query, e)
+        for variant in _query_variants(query):
+            try:
+                for book in client.search_books(variant)[:20]:
+                    normalized = _normalize_server_book(book)
+                    normalized["serverType"] = server_type
+                    results.append(normalized)
+            except Exception as e:
+                app.logger.warning("%s server search failed for '%s': %s", server_type, variant, e)
     return results
 
 
