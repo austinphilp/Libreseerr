@@ -1375,7 +1375,7 @@ def refresh_requests():
                         req["status"] = "error"
                         req["error"] = q.get("errorMessage", "Download failed")
                 else:
-                    # Check Readarr history
+                    # Check Readarr/Bookshelf status and searched releases.
                     book_id = req.get("readarr_book_id")
                     if book_id:
                         book = client.get_book_status(book_id)
@@ -1384,6 +1384,28 @@ def refresh_requests():
                             if stats.get("bookFileCount", 0) > 0:
                                 req["status"] = "completed"
                                 req["progress"] = 100
+                                continue
+
+                        # If a search has completed but every found release is
+                        # rejected (e.g. only EPUB results for an audiobook/M4B
+                        # request), surface that instead of leaving the request
+                        # stuck in processing forever.
+                        if book and book.get("lastSearchTime") and hasattr(client, "get_releases"):
+                            releases = client.get_releases(book_id)
+                            if releases and not any(not r.get("rejected") for r in releases):
+                                reasons = []
+                                for release in releases[:5]:
+                                    for reason in release.get("rejections") or []:
+                                        if reason not in reasons:
+                                            reasons.append(reason)
+                                req["status"] = "error"
+                                req["error"] = (
+                                    "No acceptable releases found"
+                                    + (f": {'; '.join(reasons)}" if reasons else "")
+                                )
+                            elif book.get("grabbed") is False and releases == []:
+                                req["status"] = "error"
+                                req["error"] = "No releases found after search"
             except Exception as e:
                 pass  # Keep current status on error
         save_requests()

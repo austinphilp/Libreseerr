@@ -328,6 +328,12 @@ class ReadarrClient:
         resp.raise_for_status()
         return resp.json()
 
+    def get_releases(self, book_id: int) -> list:
+        """Get searched releases for a specific book."""
+        resp = self.session.get(self._url("/release"), params={"bookId": book_id}, timeout=30)
+        resp.raise_for_status()
+        return resp.json()
+
     def get_books(self) -> list:
         """Get all books from the Readarr library."""
         resp = self.session.get(self._url("/book"), timeout=30)
